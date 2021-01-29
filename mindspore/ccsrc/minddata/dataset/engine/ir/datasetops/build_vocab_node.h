@@ -52,7 +52,7 @@ class BuildVocabNode : public DatasetNode {
   /// \brief a base class override function to create the required runtime dataset op objects for this class
   /// \param node_ops - A vector containing shared pointer to the Dataset Ops that this object will create
   /// \return Status Status::OK() if build successfully
-  Status Build(std::vector<std::shared_ptr<DatasetOp>> *node_ops) override;
+  Status Build(std::vector<std::shared_ptr<DatasetOp>> *const node_ops) override;
 
   /// \brief Parameters validation
   /// \return Status Status::OK() if all the parameters are valid
@@ -62,13 +62,21 @@ class BuildVocabNode : public DatasetNode {
   /// \param[in] p The node to visit
   /// \param[out] modified Indicator if the node was modified
   /// \return Status of the node visit
-  Status Accept(IRNodePass *p, bool *modified) override;
+  Status Accept(IRNodePass *const p, bool *const modified) override;
 
   /// \brief Base-class override for accepting IRNodePass visitor
   /// \param[in] p The node to visit
   /// \param[out] modified Indicator if the node was modified
   /// \return Status of the node visit
-  Status AcceptAfter(IRNodePass *p, bool *modified) override;
+  Status AcceptAfter(IRNodePass *const p, bool *const modified) override;
+
+  /// \brief Getter functions
+  const std::shared_ptr<Vocab> &GetVocab() const { return vocab_; }
+  const std::vector<std::string> &Columns() const { return columns_; }
+  const std::pair<int64_t, int64_t> &FreqRange() const { return freq_range_; }
+  int64_t TopK() const { return top_k_; }
+  const std::vector<std::string> &SpecialTokens() const { return special_tokens_; }
+  bool SpecialFirst() const { return special_first_; }
 
  private:
   std::shared_ptr<Vocab> vocab_;

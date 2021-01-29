@@ -23,14 +23,12 @@
 #include <string>
 #include <thread>
 #include <utility>
+#include <vector>
 
-#include "proto/comm.pb.h"
-#include "proto/ps.pb.h"
 #include "ps/core/cluster_config.h"
 #include "ps/core/tcp_client.h"
 #include "ps/core/tcp_server.h"
 #include "ps/core/abstract_node.h"
-#include "utils/log_adapter.h"
 
 namespace mindspore {
 namespace ps {
@@ -44,18 +42,19 @@ class ServerNode : public AbstractNode {
   bool Stop() override;
   bool Finish(const uint32_t &timeout = kTimeoutInSeconds) override;
 
-  using RequestHandler = std::function<void(const TcpServer &server, const TcpConnection &conn, const MessageMeta meta,
-                                            const std::string &message)>;
+  using RequestHandler = std::function<void(std::shared_ptr<TcpConnection> conn, std::shared_ptr<MessageMeta> meta,
+                                            DataPtr data, size_t size)>;
 
   void set_handler(const RequestHandler &handler);
-  void Response(const TcpServer &server, const TcpConnection &conn, const MessageMeta &message_meta,
-                const std::string &message);
+  void Response(std::shared_ptr<TcpConnection> conn, std::shared_ptr<MessageMeta> meta, DataPtr data, size_t size);
 
  private:
   void CreateTcpServer();
   void Initialize();
-  void ProcessSendData(const TcpServer &server, const TcpConnection &conn, const CommMessage &message);
-  void ProcessCollectiveSendData(const TcpServer &server, const TcpConnection &conn, const CommMessage &message);
+  void ProcessSendData(std::shared_ptr<TcpConnection> conn, std::shared_ptr<MessageMeta> meta, const Protos &protos,
+                       const void *data, size_t size);
+  void ProcessCollectiveSendData(std::shared_ptr<TcpConnection> conn, std::shared_ptr<MessageMeta> meta,
+                                 const void *data, size_t size);
 
   std::shared_ptr<TcpServer> server_;
   std::unique_ptr<std::thread> server_thread_;

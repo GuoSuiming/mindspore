@@ -37,7 +37,7 @@ In the current model, we use CenterNet to estimate multi-person pose. The DLA(De
 
 Note that you can run the scripts based on the dataset mentioned in original paper or widely used in relevant domain/network architecture. In the following sections, we will introduce how to run the scripts using the related dataset below.
 
-Dataset used: [COCO2017](<https://cocodataset.org/>)
+Dataset used: [COCO2017](https://cocodataset.org/)
 
 - Dataset size：26G
     - Train：19G，118000 images  
@@ -79,10 +79,10 @@ Dataset used: [COCO2017](<https://cocodataset.org/>)
 - Hardware（Ascend）
     - Prepare hardware environment with Ascend processor. If you want to try Ascend, please send the [application form](https://obs-9be7.obs.cn-east-2.myhuaweicloud.com/file/other/Ascend%20Model%20Zoo%E4%BD%93%E9%AA%8C%E8%B5%84%E6%BA%90%E7%94%B3%E8%AF%B7%E8%A1%A8.docx) to ascend@huawei.com. Once approved, you can get the resources.
 - Framework
-    - [MindSpore](https://cmc-szv.clouddragon.huawei.com/cmcversion/index/search?searchKey=Do-MindSpore%20V100R001C00B622)
+    - [MindSpore](https://www.mindspore.cn/install/en)
 - For more information, please check the resources below：
-    - [MindSpore tutorials](https://www.mindspore.cn/tutorial/zh-CN/master/index.html)
-    - [MindSpore API](https://www.mindspore.cn/api/zh-CN/master/index.html)
+    - [MindSpore tutorials](https://www.mindspore.cn/tutorial/training/en/master/index.html)
+    - [MindSpore Python API](https://www.mindspore.cn/doc/api_python/en/master/index.html)
 - Download the dataset COCO2017.
 - We use COCO2017 as training dataset in this example by default, and you can also use your own datasets.
 

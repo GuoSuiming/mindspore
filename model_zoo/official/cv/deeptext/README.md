@@ -20,7 +20,7 @@
 
 # [DeepText Description](#contents)
 
-DeepText is a convolutional neural network architecture for text detection in non-specific scenarios. The DeepText system is based on the elegant framwork of Faster R-CNN. This idea was proposed in the paper "DeepText: A new approach for text proposal generation and text detection in natural images.", published in 2017.
+DeepText is a convolutional neural network architecture for text detection in non-specific scenarios. The DeepText system is based on the elegant framework of Faster R-CNN. This idea was proposed in the paper "DeepText: A new approach for text proposal generation and text detection in natural images.", published in 2017.
 
 [Paper](https://arxiv.org/pdf/1605.07314v1.pdf) Zhuoyao Zhong, Lianwen Jin, Shuangping Huang, South China University of Technology (SCUT), Published in ICASSP 2017.
 
@@ -41,7 +41,7 @@ Here we used 4 datasets for training, and 1 datasets for Evaluation.
     - Train: 27.7MB, 410 images
 - Dataset3: SCUT-FORU: Flickr OCR Universal Database
     - Train: 388MB, 1715 images
-- Dataset4: CocoText v2(Subset of MSCOCO2014):
+- Dataset4: CocoText v2(Subset of MSCOCO2017):
     - Train: 13GB, 63686 images
 
 # [Features](#contents)
@@ -74,7 +74,7 @@ Here we used 4 datasets for training, and 1 datasets for Evaluation.
       ├─anchor_genrator.py              # anchor generator
       ├─bbox_assign_sample.py           # proposal layer for stage 1
       ├─bbox_assign_sample_stage2.py    # proposal layer for stage 2
-      ├─deeptext_vgg16.py               # main network defination
+      ├─deeptext_vgg16.py               # main network definition
       ├─proposal_generator.py           # proposal generator
       ├─rcnn.py                         # rcnn
       ├─roi_align.py                    # roi_align cell wrapper
@@ -83,7 +83,7 @@ Here we used 4 datasets for training, and 1 datasets for Evaluation.
     ├─config.py                       # training configuration
     ├─dataset.py                      # data proprocessing
     ├─lr_schedule.py                  # learning rate scheduler
-    ├─network_define.py               # network defination
+    ├─network_define.py               # network definition
     └─utils.py                        # some functions which is commonly used
   ├─eval.py                           # eval net
   ├─export.py                         # export checkpoint, surpport .onnx, .air, .mindir convert
@@ -100,9 +100,9 @@ Here we used 4 datasets for training, and 1 datasets for Evaluation.
 # distribute training example(8p)
 sh run_distribute_train_ascend.sh [IMGS_PATH] [ANNOS_PATH] [RANK_TABLE_FILE] [PRETRAINED_PATH] [COCO_TEXT_PARSER_PATH]
 # standalone training
-sh run_standalone_train_ascend.sh [IMGS_PATH] [ANNOS_PATH] [PRETRAINED_PATH] [COCO_TEXT_PARSER_PATH]
+sh run_standalone_train_ascend.sh [IMGS_PATH] [ANNOS_PATH] [PRETRAINED_PATH] [COCO_TEXT_PARSER_PATH] [DEVICE_ID]
 # evaluation:
-sh run_eval_ascend.sh [IMGS_PATH] [ANNOS_PATH] [CHECKPOINT_PATH] [COCO_TEXT_PARSER_PATH]
+sh run_eval_ascend.sh [IMGS_PATH] [ANNOS_PATH] [CHECKPOINT_PATH] [COCO_TEXT_PARSER_PATH] [DEVICE_ID]
 ```
 
 > Notes:
@@ -122,7 +122,7 @@ sh run_eval_ascend.sh [IMGS_PATH] [ANNOS_PATH] [CHECKPOINT_PATH] [COCO_TEXT_PARS
       # distribute training example(8p)
       sh run_distribute_train_ascend.sh [IMGS_PATH] [ANNOS_PATH] [RANK_TABLE_FILE] [PRETRAINED_PATH] [COCO_TEXT_PARSER_PATH]
       # standalone training
-      sh run_standalone_train_ascend.sh [IMGS_PATH] [ANNOS_PATH] [PRETRAINED_PATH] [COCO_TEXT_PARSER_PATH]
+      sh run_standalone_train_ascend.sh [IMGS_PATH] [ANNOS_PATH] [PRETRAINED_PATH] [COCO_TEXT_PARSER_PATH] [DEVICE_ID]
 ```
 
 ### Result
@@ -144,7 +144,7 @@ You can start training using python or shell scripts. The usage of shell scripts
 - Ascend:
 
 ```bash
-  sh run_eval_ascend.sh [IMGS_PATH] [ANNOS_PATH] [CHECKPOINT_PATH] [COCO_TEXT_PARSER_PATH]
+  sh run_eval_ascend.sh [IMGS_PATH] [ANNOS_PATH] [CHECKPOINT_PATH] [COCO_TEXT_PARSER_PATH] [DEVICE_ID]
 ```
 
 ### Launch
@@ -153,7 +153,7 @@ You can start training using python or shell scripts. The usage of shell scripts
 # eval example
   shell:
       Ascend:
-            sh run_eval_ascend.sh [IMGS_PATH] [ANNOS_PATH] [CHECKPOINT_PATH] [COCO_TEXT_PARSER_PATH]
+            sh run_eval_ascend.sh [IMGS_PATH] [ANNOS_PATH] [CHECKPOINT_PATH] [COCO_TEXT_PARSER_PATH] [DEVICE_ID]
 ```
 
 > checkpoint can be produced in training process.
@@ -186,9 +186,8 @@ class 1 precision is 88.01%, recall is 82.77%
 | Optimizer                  | Momentum                                                     |
 | Loss Function              | SoftmaxCrossEntropyWithLogits for classification, SmoothL2Loss for bbox regression|
 | Loss                       | ~0.008                                                       |
-| Accuracy (8p)              | precision=0.8854, recall=0.8024                              |
 | Total time (8p)            | 4h                                                           |
-| Scripts                    | [deeptext script](https://gitee.com/mindspore/mindspore/tree/r1.1/mindspore/official/cv/deeptext) |
+| Scripts                    | [deeptext script](https://gitee.com/mindspore/mindspore/tree/master/model_zoo/official/cv/deeptext) |
 
 #### Inference Performance
 
@@ -200,7 +199,7 @@ class 1 precision is 88.01%, recall is 82.77%
 | MindSpore Version   | 1.1.0              |
 | Dataset             | 229 images                  |
 | Batch_size          | 2                         |
-| Accuracy            | precision=0.8854, recall=0.8024 |
+| Accuracy            | precision=0.8801, recall=0.8277 |
 | Total time          | 1 min                      |
 | Model for inference | 3492M (.ckpt file)   |
 
@@ -208,11 +207,11 @@ class 1 precision is 88.01%, recall is 82.77%
 
 | **Ascend** | train performance |
 | :--------: | :---------------: |
-|     1p     |     42 img/s      |
+|     1p     |     14 img/s      |
 
 | **Ascend** | train performance |
 | :--------: | :---------------: |
-|     8p     |     330 img/s     |
+|     8p     |     50 img/s     |
 
 # [Description of Random Situation](#contents)
 

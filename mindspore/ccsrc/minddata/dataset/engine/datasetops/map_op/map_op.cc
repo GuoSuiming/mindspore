@@ -287,6 +287,14 @@ Status MapOp::WorkerCompute(DataBuffer *in_buffer, TensorQTable *new_tensor_tabl
     // From the current row, select the Tensor that need to be passed to TensorOp
     (void)std::transform(to_process_indices_.begin(), to_process_indices_.end(), std::back_inserter(to_process),
                          [&cur_row](const auto &it) { return std::move(cur_row[it]); });
+    to_process.setId(cur_row.getId());
+    std::vector<std::string> cur_row_path = cur_row.getPath();
+    if (cur_row_path.size() > 0) {
+      std::vector<std::string> to_process_path;
+      (void)std::transform(to_process_indices_.begin(), to_process_indices_.end(), std::back_inserter(to_process_path),
+                           [&cur_row_path](const auto &it) { return cur_row_path[it]; });
+      to_process.setPath(to_process_path);
+    }
     job_input_table.push_back(std::move(to_process));
     original_table.push_back(std::move(cur_row));
   }
@@ -438,13 +446,13 @@ void MapOp::CreateFinalColMap(std::unordered_map<std::string, int32_t> *col_name
 }
 
 // Visitor accept method for NodePass
-Status MapOp::Accept(NodePass *p, bool *modified) {
+Status MapOp::Accept(NodePass *p, bool *const modified) {
   // Downcast shared pointer then call visitor
   return p->RunOnNode(shared_from_base<MapOp>(), modified);
 }
 
 // Visitor pre-accept method for NodePass
-Status MapOp::PreAccept(NodePass *p, bool *modified) {
+Status MapOp::PreAccept(NodePass *p, bool *const modified) {
   // Downcast shared pointer then call visitor
   return p->PreRunOnNode(shared_from_base<MapOp>(), modified);
 }

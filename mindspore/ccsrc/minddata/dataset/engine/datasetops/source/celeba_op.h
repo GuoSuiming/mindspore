@@ -173,7 +173,7 @@ class CelebAOp : public ParallelOp, RandomAccessOp {
   /// \param[in] p Pointer to the NodePass to be accepted
   /// \param[out] modified Indicator if the node was changed at all
   /// \return Status of the node visit
-  Status Accept(NodePass *p, bool *modified) override;
+  Status Accept(NodePass *p, bool *const modified) override;
 
   // Op name getter
   // @return Name of the current Op
@@ -232,6 +232,7 @@ class CelebAOp : public ParallelOp, RandomAccessOp {
   std::vector<std::pair<std::string, std::vector<int32_t>>> image_labels_vec_;
   std::string usage_;
   std::ifstream partition_file_;
+  std::string attr_file_;
 };
 }  // namespace dataset
 }  // namespace mindspore

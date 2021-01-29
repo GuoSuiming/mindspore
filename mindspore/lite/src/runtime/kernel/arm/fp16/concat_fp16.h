@@ -20,7 +20,7 @@
 #include <vector>
 #include "include/context.h"
 #include "include/errorcode.h"
-#include "nnacl/fp16/concat_fp16.h"
+#include "nnacl/base/concat_base.h"
 #include "nnacl/concat_parameter.h"
 #include "nnacl/fp16/cast_fp16.h"
 #include "src/lite_kernel.h"
@@ -36,13 +36,9 @@ class ConcatFp16CPUKernel : public LiteKernel {
       : LiteKernel(parameter, inputs, outputs, ctx, primitive) {
     concat_param_ = reinterpret_cast<ConcatParameter *>(op_parameter_);
   }
-
   ~ConcatFp16CPUKernel() = default;
-
   int Init() override;
-
   int ReSize() override;
-
   int Run() override;
 
  private:

@@ -17,9 +17,12 @@
 #include "runtime/device/memory_manager.h"
 #include <string>
 #include "backend/session/anf_runtime_algorithm.h"
+#include "debug/rdr/running_data_recorder.h"
 #include "utils/ms_context.h"
+
 using mindspore::memreuse::BestFitMemReuse;
 using mindspore::memreuse::MemReuseUtilPtr;
+
 namespace mindspore {
 namespace device {
 size_t MemoryManager::GetCommonAlignSize(size_t input_size) const {
@@ -67,15 +70,24 @@ void MemoryManager::MallocSomasDynamicMem(const session::KernelGraph *graph) {
 
   auto context_ptr = MsContext::GetInstance();
   MS_EXCEPTION_IF_NULL(context_ptr);
+#ifdef ENABLE_DUMP_IR
+  SubModuleId module = SubModuleId::SM_OPTIMIZER;
+  std::string tag = "somas";
+
+  std::string filename = "somas_allocate_info_" + std::to_string(graph->graph_id()) + ".ir";
+  mindspore::RDR::RecordString(module, tag, somas_reuse_util_ptr_->SomasInfo(), filename);
+
+  filename = "somas_mem_info_" + std::to_string(graph->graph_id()) + ".ir";
+  mindspore::RDR::RecordString(module, tag, somas_reuse_util_ptr_->SomasMemory(), filename);
+#endif
   bool save_graphs = context_ptr->get_param<bool>(MS_CTX_SAVE_GRAPHS_FLAG);
   auto save_graphs_path = context_ptr->get_param<std::string>(MS_CTX_SAVE_GRAPHS_PATH);
   if (save_graphs_path.empty()) {
     save_graphs_path = ".";
   }
   if (save_graphs) {
-    std::string file_path =
-      save_graphs_path + "/" + "somas_after_allocate_" + std::to_string(graph->graph_id()) + ".ir";
-    somas_reuse_util_ptr_->DumpSomasBasicIR(file_path);
+    std::string file_path = save_graphs_path + "/" + "somas_allocate_info_" + std::to_string(graph->graph_id()) + ".ir";
+    somas_reuse_util_ptr_->DumpSomasInfoIR(file_path);
 
     std::string mem_file_path = save_graphs_path + "/" + "somas_mem_info_" + std::to_string(graph->graph_id()) + ".ir";
     somas_reuse_util_ptr_->DumpSomasMemoryIR(mem_file_path);
@@ -140,11 +152,11 @@ uint8_t *MemoryManager::MallocWorkSpaceMem(const AnfNodePtr &node, size_t index,
   return MallocDynamicMem(size, false);
 }
 
-uint8_t *MemoryManager::MallocMem(MemType type, size_t size, const DeviceAddressPtr &address) {
+uint8_t *MemoryManager::MallocMem(MemType type, size_t size, const DeviceAddressPtr &address, uint32_t graph_id) {
   MS_EXCEPTION_IF_NULL(address);
   uint8_t *ptr = nullptr;
   if (type == kStaticMem) {
-    ptr = MallocStaticMem(size, false);
+    ptr = MallocStaticMem(size, false, graph_id);
     address->from_mem_pool_ = true;
   } else if (type == kDynamicMem) {
     ptr = MallocDynamicMem(size, false);
@@ -153,7 +165,7 @@ uint8_t *MemoryManager::MallocMem(MemType type, size_t size, const DeviceAddress
   return ptr;
 }
 
-uint8_t *MemoryManager::MallocStaticMem(size_t size, bool communication_mem) {
+uint8_t *MemoryManager::MallocStaticMem(size_t size, bool communication_mem, uint32_t graph_id) {
   size_t align_size = 0;
   if (communication_mem) {
     align_size = GetCommunicationAlignSize(size);

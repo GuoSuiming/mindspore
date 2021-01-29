@@ -56,7 +56,7 @@ class ImageFolderNode : public MappableSourceNode {
   /// \brief a base class override function to create the required runtime dataset op objects for this class
   /// \param node_ops - A vector containing shared pointer to the Dataset Ops that this object will create
   /// \return Status Status::OK() if build successfully
-  Status Build(std::vector<std::shared_ptr<DatasetOp>> *node_ops) override;
+  Status Build(std::vector<std::shared_ptr<DatasetOp>> *const node_ops) override;
 
   /// \brief Parameters validation
   /// \return Status Status::OK() if all the parameters are valid
@@ -74,6 +74,25 @@ class ImageFolderNode : public MappableSourceNode {
   /// \return Status of the function
   Status GetDatasetSize(const std::shared_ptr<DatasetSizeGetter> &size_getter, bool estimate,
                         int64_t *dataset_size) override;
+
+  /// \brief Getter functions
+  const std::string &DatasetDir() const { return dataset_dir_; }
+  bool Decode() const { return decode_; }
+  bool Recursive() const { return recursive_; }
+  const std::map<std::string, int32_t> &ClassIndexing() const { return class_indexing_; }
+  const std::set<std::string> &Exts() const { return exts_; }
+
+  /// \brief Get the arguments of node
+  /// \param[out] out_json JSON string of all attributes
+  /// \return Status of the function
+  Status to_json(nlohmann::json *out_json) override;
+
+  /// \brief Sampler getter
+  /// \return SamplerObj of the current node
+  std::shared_ptr<SamplerObj> Sampler() override { return sampler_; }
+
+  /// \brief Sampler setter
+  void SetSampler(std::shared_ptr<SamplerObj> sampler) override { sampler_ = sampler; }
 
  private:
   std::string dataset_dir_;

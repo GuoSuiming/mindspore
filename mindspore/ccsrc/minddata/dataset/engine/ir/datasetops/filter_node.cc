@@ -43,7 +43,7 @@ void FilterNode::Print(std::ostream &out) const {
   out << Name() + "(<predicate>," + "input_cols:" + PrintColumns(input_columns_) + ")";
 }
 
-Status FilterNode::Build(std::vector<std::shared_ptr<DatasetOp>> *node_ops) {
+Status FilterNode::Build(std::vector<std::shared_ptr<DatasetOp>> *const node_ops) {
   node_ops->push_back(std::make_shared<FilterOp>(input_columns_, num_workers_, connector_que_size_, predicate_));
   return Status::OK();
 }
@@ -62,16 +62,24 @@ Status FilterNode::ValidateParams() {
 }
 
 // Visitor accepting method for IRNodePass
-Status FilterNode::Accept(IRNodePass *p, bool *modified) {
+Status FilterNode::Accept(IRNodePass *const p, bool *const modified) {
   // Downcast shared pointer then call visitor
   return p->Visit(shared_from_base<FilterNode>(), modified);
 }
 
 // Visitor accepting method for IRNodePass
-Status FilterNode::AcceptAfter(IRNodePass *p, bool *modified) {
+Status FilterNode::AcceptAfter(IRNodePass *const p, bool *const modified) {
   // Downcast shared pointer then call visitor
   return p->VisitAfter(shared_from_base<FilterNode>(), modified);
 }
 
+Status FilterNode::to_json(nlohmann::json *out_json) {
+  nlohmann::json args;
+  args["input_columns"] = input_columns_;
+  args["num_parallel_workers"] = num_workers_;
+  args["predicate"] = "pyfunc";
+  *out_json = args;
+  return Status::OK();
+}
 }  // namespace dataset
 }  // namespace mindspore

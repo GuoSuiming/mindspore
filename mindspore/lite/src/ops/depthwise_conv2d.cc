@@ -19,7 +19,7 @@
 #include <memory>
 #include <string>
 #ifdef PRIMITIVE_WRITEABLE
-#include "tools/converter/quantizer/quantize_util.h"
+#include "src/param_value_lite.h"
 #endif
 #ifndef PRIMITIVE_WRITEABLE
 #include "src/ops/ops_register.h"
@@ -193,7 +193,7 @@ Registry DepthWiseConv2DRegistry(schema::PrimitiveType_DepthwiseConv2D, DepthWis
 #endif
 
 int DepthwiseConv2D::InferShape(std::vector<lite::Tensor *> inputs_, std::vector<lite::Tensor *> outputs_) {
-  if (inputs_.size() != kDoubleNum && inputs_.size() != kMultiNum) {
+  if (inputs_.size() != kDoubleNum && inputs_.size() != kTripleNum) {
     MS_LOG(ERROR) << "inputs number is invalid";
     return 1;
   }

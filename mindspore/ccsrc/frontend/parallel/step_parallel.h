@@ -82,11 +82,6 @@ std::pair<AnfNodePtr, bool> FindParameter(const AnfNodePtr &node, const FuncGrap
 
 std::pair<bool, CNodePtr> FindCNode(const AnfNodePtr &anode, const std::string &name, const FuncGraphPtr &func_graph);
 
-void InsertMirrorOps(const MirrorOps &mirror_ops, const CNodePtr &node);
-
-void BackwardCommunication(const OperatorInfoPtr &distribute_operator, const CNodePtr &node,
-                           const std::vector<std::pair<CNodePtr, LossNodeInfo>> &sens_loss_pairs);
-
 // Generate and init parallel operator
 OperatorInfoPtr OperatorInstance(const PrimitivePtr &prim, const PrimitiveAttrs &attrs,
                                  const std::vector<Shapes> &shape_list);
@@ -114,7 +109,7 @@ void CoverSliceShape(const FuncGraphPtr &root);
 
 void SetVirtualDatasetStrategy(const CNodePtr &node);
 
-// Creat parallel operator for primitive node(has strategy)
+// Create parallel operator for primitive node(has strategy)
 void ExtractInformation(const std::vector<AnfNodePtr> &all_nodes, bool is_training = true);
 
 TensorLayout GetInputLayoutFromCNode(const std::pair<AnfNodePtr, int64_t> &node_pair);
@@ -167,6 +162,8 @@ void ApplyParallelOptOnParam(TensorLayout *tensor_layout, const OperatorInfoPtr 
                              const CNodePtr &cnode, const AnfNodePtr &parameter, size_t index);
 
 void SetLastNodeStrategy(const StrategyPtr strategyPtr);
+
+bool CreateGroupsByCkptFile(const std::string &file);
 
 void FindLastNodesUniqueId(const std::vector<AnfNodePtr> &all_nodes, std::vector<std::string> *unique_ids);
 }  // namespace parallel

@@ -125,12 +125,12 @@ class CacheOp : public CacheBase, public RandomAccessOp {
   /// \param[in] p The node to visit
   /// \param[out] modified Indicator if the node was modified
   /// \return Status of the node visit
-  Status PreAccept(NodePass *p, bool *modified) override;
+  Status PreAccept(NodePass *p, bool *const modified) override;
   /// \brief Base-class override for NodePass visitor acceptor
   /// \param[in] p The node to visit
   /// \param[out] modified Indicator if the node was modified
   /// \return Status of the node visit
-  Status Accept(NodePass *p, bool *modified) override;
+  Status Accept(NodePass *p, bool *const modified) override;
   /// \brief Base-class override for handling cases when an eof is received.
   /// \param worker_id - The worker id
   /// \return Status The status code returned
@@ -141,11 +141,7 @@ class CacheOp : public CacheBase, public RandomAccessOp {
   bool AllowCacheMiss() override { return false; }
   /// \brief Base-class override for the name of this operator
   std::string Name() const override { return kCacheOp; }
-  /// \brief A public wrapper for creating the cache through the client
-  /// \param[in] cache_crc The crc that identifies the cache
-  /// \see cache_pass.cc
-  /// \return Status return code
-  Status CreateCache(uint32_t cache_crc);
+  Status PrepareNodePostAction() override;
 
  private:
   WaitPost rows_cache_done_;

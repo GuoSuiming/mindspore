@@ -1,25 +1,828 @@
 <resources>
-    <string name="app_name">HiMindSpore</string>
-    <string name="app_name_title">MindSpore</string>
-    <string name="switch_custom">custom</string>
-
-    <string name="title_image">Image Classification</string>
-    <string name="title_image_garbage">Garbage Classification</string>
-    <string name="title_object">Photo Detection</string>
-    <string name="title_object_camera">Camera Detection</string>
-    <string name="title_pose_net">PoseNet</string>
-    <string name="title_style_transfer">Style Transfer</string>
-    <string name="title_source">Source Code</string>
-    <string name="title_help">Help And FeedBack</string>
-
-    <string name="title_photo">Photo</string>
-    <string name="title_camera">Camera</string>
-
-    <string name="title_demo">Demo</string>
-    <string name="title_custom">Custom</string>
+    <string name="app_name">MindSpore</string>
 
     <string name="title_time">Inference Time</string>
-
+    <string name="title_keep">Keep moving.</string>
     <string name="image_invalid">The image path you selected is not valid. Please choose again</string>
     <string name="train_invalid">Sorry, there is no object identified in this picture. Try another picture</string>
+
+    <string-array name="image_category">
+        <item>Herd</item>
+        <item>Safari</item>
+        <item>Bangle</item>
+        <item>Cushion</item>
+        <item>Countertop</item>
+        <item>Prom</item>
+        <item>Branch</item>
+        <item>Sports</item>
+        <item>Sky</item>
+        <item>Community</item>
+        <item>Wheel</item>
+        <item>Cola</item>
+        <item>Tuxedo</item>
+        <item>Flowerpot</item>
+        <item>Team</item>
+        <item>Computer</item>
+        <item>Unicycle</item>
+        <item>Brig</item>
+        <item>Aerospace engineering</item>
+        <item>Scuba diving</item>
+        <item>Goggles</item>
+        <item>Fruit</item>
+        <item>Badminton</item>
+        <item>Horse</item>
+        <item>Sunglasses</item>
+        <item>Fun</item>
+        <item>Prairie</item>
+        <item>Poster</item>
+        <item>Flag</item>
+        <item>Speedboat</item>
+        <item>Eyelash</item>
+        <item>Veil</item>
+        <item>Mobile phone</item>
+        <item>Wheelbarrow</item>
+        <item>Saucer</item>
+        <item>Leather</item>
+        <item>Drawer</item>
+        <item>Paper</item>
+        <item>Pier</item>
+        <item>Waterfowl</item>
+        <item>Tights</item>
+        <item>Rickshaw</item>
+        <item>Vegetable</item>
+        <item>Handrail</item>
+        <item>Ice</item>
+        <item>Metal</item>
+        <item>Flower</item>
+        <item>Wing</item>
+        <item>Silverware</item>
+        <item>Event</item>
+        <item>Skyline</item>
+        <item>Money</item>
+        <item>Comics</item>
+        <item>Handbag</item>
+        <item>Porcelain</item>
+        <item>Rodeo</item>
+        <item>Curtain</item>
+        <item>Tile</item>
+        <item>Human mouth</item>
+        <item>Army</item>
+        <item>Menu</item>
+        <item>Boat</item>
+        <item>Snowboarding</item>
+        <item>Cairn terrier</item>
+        <item>Net</item>
+        <item>Pasteles</item>
+        <item>Cup</item>
+        <item>Rugby</item>
+        <item>Pho</item>
+        <item>Cap</item>
+        <item>Human hair</item>
+        <item>Surfing</item>
+        <item>Loveseat</item>
+        <item>Museum</item>
+        <item>Shipwreck</item>
+        <item>Trunk (Tree)</item>
+        <item>Plush</item>
+        <item>Monochrome</item>
+        <item>Volcano</item>
+        <item>Rock</item>
+        <item>Pillow</item>
+        <item>Presentation</item>
+        <item>Nebula</item>
+        <item>Subwoofer</item>
+        <item>Lake</item>
+        <item>Sledding</item>
+        <item>Bangs</item>
+        <item>Tablecloth</item>
+        <item>Necklace</item>
+        <item>Swimwear</item>
+        <item>Standing</item>
+        <item>Jeans</item>
+        <item>Carnival</item>
+        <item>Softball</item>
+        <item>Centrepiece</item>
+        <item>Skateboarder</item>
+        <item>Cake</item>
+        <item>Dragon</item>
+        <item>Aurora</item>
+        <item>Skiing</item>
+        <item>Bathroom</item>
+        <item>Dog</item>
+        <item>Needlework</item>
+        <item>Umbrella</item>
+        <item>Church</item>
+        <item>Fire</item>
+        <item>Piano</item>
+        <item>Denim</item>
+        <item>Bridle</item>
+        <item>Cabinetry</item>
+        <item>Lipstick</item>
+        <item>Ring</item>
+        <item>Television</item>
+        <item>Roller</item>
+        <item>Seal</item>
+        <item>Concert</item>
+        <item>Product</item>
+        <item>News</item>
+        <item>Fast food</item>
+        <item>Horn (Animal)</item>
+        <item>Tattoo</item>
+        <item>Bird</item>
+        <item>Bridegroom</item>
+        <item>Love</item>
+        <item>Helmet</item>
+        <item>Dinosaur</item>
+        <item>Icing</item>
+        <item>Miniature</item>
+        <item>Tire</item>
+        <item>Toy</item>
+        <item>Icicle</item>
+        <item>Jacket</item>
+        <item>Coffee</item>
+        <item>Mosque</item>
+        <item>Rowing</item>
+        <item>Wetsuit</item>
+        <item>Camping</item>
+        <item>Underwater</item>
+        <item>Christmas</item>
+        <item>Gelato</item>
+        <item>Whiteboard</item>
+        <item>Field</item>
+        <item>Ragdoll</item>
+        <item>Construction</item>
+        <item>Lampshade</item>
+        <item>Palace</item>
+        <item>Meal</item>
+        <item>Factory</item>
+        <item>Cage</item>
+        <item>Clipper (Boat)</item>
+        <item>Gymnastics</item>
+        <item>Turtle</item>
+        <item>Human foot</item>
+        <item>Marriage</item>
+        <item>Web page</item>
+        <item>Human beard</item>
+        <item>Fog</item>
+        <item>Wool</item>
+        <item>Cappuccino</item>
+        <item>Lighthouse</item>
+        <item>Lego</item>
+        <item>Sparkler</item>
+        <item>Sari</item>
+        <item>Model</item>
+        <item>Temple</item>
+        <item>Beanie</item>
+        <item>Building</item>
+        <item>Waterfall</item>
+        <item>Penguin</item>
+        <item>Cave</item>
+        <item>Stadium</item>
+        <item>Smile</item>
+        <item>Human hand</item>
+        <item>Park</item>
+        <item>Desk</item>
+        <item>Shetland sheepdog</item>
+        <item>Bar</item>
+        <item>Eating</item>
+        <item>Neon</item>
+        <item>Dalmatian</item>
+        <item>Crocodile</item>
+        <item>Wakeboarding</item>
+        <item>Longboard</item>
+        <item>Road</item>
+        <item>Race</item>
+        <item>Kitchen</item>
+        <item>Odometer</item>
+        <item>Cliff</item>
+        <item>Fiction</item>
+        <item>School</item>
+        <item>Interaction</item>
+        <item>Bullfighting</item>
+        <item>Boxer</item>
+        <item>Gown</item>
+        <item>Aquarium</item>
+        <item>Superhero</item>
+        <item>Pie</item>
+        <item>Asphalt</item>
+        <item>Surfboard</item>
+        <item>Cheeseburger</item>
+        <item>Screenshot</item>
+        <item>Supper</item>
+        <item>Laugh</item>
+        <item>Lunch</item>
+        <item>Party </item>
+        <item>Glacier</item>
+        <item>Bench</item>
+        <item>Grandparent</item>
+        <item>Sink</item>
+        <item>Pomacentridae</item>
+        <item>Blazer</item>
+        <item>Brick</item>
+        <item>Space</item>
+        <item>Backpacking</item>
+        <item>Stuffed toy</item>
+        <item>Sushi</item>
+        <item>Glitter</item>
+        <item>Bonfire</item>
+        <item>Castle</item>
+        <item>Marathon</item>
+        <item>Pizza</item>
+        <item>Beach</item>
+        <item>Human ear</item>
+        <item>Racing</item>
+        <item>Sitting</item>
+        <item>Iceberg</item>
+        <item>Shelf</item>
+        <item>Vehicle</item>
+        <item>Pop music</item>
+        <item>Playground</item>
+        <item>Clown</item>
+        <item>Car</item>
+        <item>Rein</item>
+        <item>Fur</item>
+        <item>Musician</item>
+        <item>Casino</item>
+        <item>Baby</item>
+        <item>Alcohol</item>
+        <item>Strap</item>
+        <item>Reef</item>
+        <item>Balloon</item>
+        <item>Outerwear</item>
+        <item>Cathedral</item>
+        <item>Competition</item>
+        <item>Joker</item>
+        <item>Blackboard</item>
+        <item>Bunk bed</item>
+        <item>Bear</item>
+        <item>Moon</item>
+        <item>Archery</item>
+        <item>Polo</item>
+        <item>River</item>
+        <item>Fishing</item>
+        <item>Ferris wheel</item>
+        <item>Mortarboard</item>
+        <item>Bracelet</item>
+        <item>Flesh</item>
+        <item>Statue</item>
+        <item>Farm</item>
+        <item>Desert</item>
+        <item>Chain</item>
+        <item>Aircraft</item>
+        <item>Textile</item>
+        <item>Hot dog</item>
+        <item>Knitting</item>
+        <item>Singer</item>
+        <item>Juice</item>
+        <item>Circus</item>
+        <item>Chair</item>
+        <item>Musical instrument</item>
+        <item>Room</item>
+        <item>Crochet</item>
+        <item>Sailboat</item>
+        <item>Newspaper</item>
+        <item>Santa claus</item>
+        <item>Swamp</item>
+        <item>Skyscraper</item>
+        <item>Skin</item>
+        <item>Rocket</item>
+        <item>Aviation</item>
+        <item>Airliner</item>
+        <item>Garden</item>
+        <item>Ruins</item>
+        <item>Storm</item>
+        <item>Glasses</item>
+        <item>Balance</item>
+        <item>Nail (Body part)</item>
+        <item>Rainbow</item>
+        <item>Soil </item>
+        <item>Vacation </item>
+        <item>Moustache</item>
+        <item>Doily</item>
+        <item>Food</item>
+        <item>Bride </item>
+        <item>Cattle</item>
+        <item>Pocket</item>
+        <item>Infrastructure</item>
+        <item>Train</item>
+        <item>Gerbil</item>
+        <item>Fireworks</item>
+        <item>Pet</item>
+        <item>Dam</item>
+        <item>Crew</item>
+        <item>Couch</item>
+        <item>Bathing</item>
+        <item>Quilting</item>
+        <item>Motorcycle</item>
+        <item>Butterfly</item>
+        <item>Sled</item>
+        <item>Watercolor paint</item>
+        <item>Rafting</item>
+        <item>Monument</item>
+        <item>Lightning</item>
+        <item>Sunset</item>
+        <item>Bumper</item>
+        <item>Shoe</item>
+        <item>Waterskiing</item>
+        <item>Sneakers</item>
+        <item>Tower</item>
+        <item>Insect</item>
+        <item>Pool</item>
+        <item>Placemat</item>
+        <item>Airplane</item>
+        <item>Plant</item>
+        <item>Jungle</item>
+        <item>Armrest</item>
+        <item>Duck</item>
+        <item>Dress</item>
+        <item>Tableware</item>
+        <item>Petal</item>
+        <item>Bus</item>
+        <item>Hanukkah</item>
+        <item>Forest</item>
+        <item>Hat</item>
+        <item>Barn</item>
+        <item>Tubing</item>
+        <item>Snorkeling</item>
+        <item>Cool</item>
+        <item>Cookware and bakeware</item>
+        <item>Cycling</item>
+        <item>Swing (Seat)</item>
+        <item>Muscle</item>
+        <item>Cat</item>
+        <item>Skateboard</item>
+        <item>Star</item>
+        <item>Toe</item>
+        <item>Junk</item>
+        <item>Bicycle</item>
+        <item>Bedroom</item>
+        <item>Person</item>
+        <item>Sand</item>
+        <item>Canyon</item>
+        <item>Tie</item>
+        <item>Twig</item>
+        <item>Sphynx</item>
+        <item>Supervillain</item>
+        <item>Nightclub</item>
+        <item>Ranch</item>
+        <item>Pattern</item>
+        <item>Shorts</item>
+        <item>Himalayan</item>
+        <item>Wall</item>
+        <item>Leggings</item>
+        <item>Windsurfing</item>
+        <item>Deejay</item>
+        <item>Dance</item>
+        <item>Van</item>
+        <item>Bento</item>
+        <item>Sleep</item>
+        <item>Wine</item>
+        <item>Picnic</item>
+        <item>Leisure</item>
+        <item>Dune</item>
+        <item>Crowd</item>
+        <item>Kayak</item>
+        <item>Ballroom</item>
+        <item>Selfie</item>
+        <item>Graduation</item>
+        <item>Frigate</item>
+        <item>Mountain</item>
+        <item>Dude</item>
+        <item>Windshield</item>
+        <item>Skiff</item>
+        <item>Class</item>
+        <item>Scarf</item>
+        <item>Bull</item>
+        <item>Soccer</item>
+        <item>Bag</item>
+        <item>Basset hound</item>
+        <item>Tractor</item>
+        <item>Swimming</item>
+        <item>Running</item>
+        <item>Track</item>
+        <item>Helicopter</item>
+        <item>Pitch</item>
+        <item>Clock</item>
+        <item>Song</item>
+        <item>Jersey</item>
+        <item>Stairs</item>
+        <item>Flap</item>
+        <item>Jewellery</item>
+        <item>Bridge</item>
+        <item>Cuisine</item>
+        <item>Bread</item>
+        <item>Caving</item>
+        <item>Shell</item>
+        <item>Wreath</item>
+        <item>Roof</item>
+        <item>Cookie</item>
+        <item>Canoe</item>
+    </string-array>
+
+
+    <string-array name="scene_category">
+        <item>airfield</item>
+        <item>airplane_cabin</item>
+        <item>airport_terminal</item>
+        <item>alcove</item>
+        <item>alley</item>
+        <item>amphitheater</item>
+        <item>amusement_arcade</item>
+        <item>amusement_park</item>
+        <item>apartment_building/outdoor</item>
+        <item>aquarium</item>
+        <item>aqueduct</item>
+        <item>arcade</item>
+        <item>arch</item>
+        <item>archaelogical_excavation</item>
+        <item>archive</item>
+        <item>arena/hockey</item>
+        <item>arena/performance</item>
+        <item>arena/rodeo</item>
+        <item>army_base</item>
+        <item>art_gallery</item>
+        <item>art_school</item>
+        <item>art_studio</item>
+        <item>artists_loft</item>
+        <item>assembly_line</item>
+        <item>athletic_field/outdoor</item>
+        <item>atrium/public</item>
+        <item>attic</item>
+        <item>auditorium</item>
+        <item>auto_factory</item>
+        <item>auto_showroom</item>
+        <item>badlands</item>
+        <item>bakery/shop</item>
+        <item>balcony/exterior</item>
+        <item>balcony/interior</item>
+        <item>ball_pit</item>
+        <item>ballroom</item>
+        <item>bamboo_forest</item>
+        <item>bank_vault</item>
+        <item>banquet_hall</item>
+        <item>bar</item>
+        <item>barn</item>
+        <item>barndoor</item>
+        <item>baseball_field</item>
+        <item>basement</item>
+        <item>basketball_court/indoor</item>
+        <item>bathroom</item>
+        <item>bazaar/indoor</item>
+        <item>bazaar/outdoor</item>
+        <item>beach</item>
+        <item>beach_house</item>
+        <item>beauty_salon</item>
+        <item>bedchamber</item>
+        <item>bedroom</item>
+        <item>beer_garden</item>
+        <item>beer_hall</item>
+        <item>berth</item>
+        <item>biology_laboratory</item>
+        <item>boardwalk</item>
+        <item>boat_deck</item>
+        <item>boathouse</item>
+        <item>bookstore</item>
+        <item>booth/indoor</item>
+        <item>botanical_garden</item>
+        <item>bow_window/indoor</item>
+        <item>bowling_alley</item>
+        <item>boxing_ring</item>
+        <item>bridge</item>
+        <item>building_facade</item>
+        <item>bullring</item>
+        <item>burial_chamber</item>
+        <item>bus_interior</item>
+        <item>bus_station/indoor</item>
+        <item>butchers_shop</item>
+        <item>butte</item>
+        <item>cabin/outdoor</item>
+        <item>cafeteria</item>
+        <item>campsite</item>
+        <item>campus</item>
+        <item>canal/natural</item>
+        <item>canal/urban</item>
+        <item>candy_store</item>
+        <item>canyon</item>
+        <item>car_interior</item>
+        <item>carrousel</item>
+        <item>castle</item>
+        <item>catacomb</item>
+        <item>cemetery</item>
+        <item>chalet</item>
+        <item>chemistry_lab</item>
+        <item>childs_room</item>
+        <item>church/indoor</item>
+        <item>church/outdoor</item>
+        <item>classroom</item>
+        <item>clean_room</item>
+        <item>cliff</item>
+        <item>closet</item>
+        <item>clothing_store</item>
+        <item>coast</item>
+        <item>cockpit</item>
+        <item>coffee_shop</item>
+        <item>computer_room</item>
+        <item>conference_center</item>
+        <item>conference_room</item>
+        <item>construction_site</item>
+        <item>corn_field</item>
+        <item>corral</item>
+        <item>corridor</item>
+        <item>cottage</item>
+        <item>courthouse</item>
+        <item>courtyard</item>
+        <item>creek</item>
+        <item>crevasse</item>
+        <item>crosswalk</item>
+        <item>dam</item>
+        <item>delicatessen</item>
+        <item>department_store</item>
+        <item>desert/sand</item>
+        <item>desert/vegetation</item>
+        <item>desert_road</item>
+        <item>diner/outdoor</item>
+        <item>dining_hall</item>
+        <item>dining_room</item>
+        <item>discotheque</item>
+        <item>doorway/outdoor</item>
+        <item>dorm_room</item>
+        <item>downtown</item>
+        <item>dressing_room</item>
+        <item>driveway</item>
+        <item>drugstore</item>
+        <item>elevator/door</item>
+        <item>elevator_lobby</item>
+        <item>elevator_shaft</item>
+        <item>embassy</item>
+        <item>engine_room</item>
+        <item>entrance_hall</item>
+        <item>escalator/indoor</item>
+        <item>excavation</item>
+        <item>fabric_store</item>
+        <item>farm</item>
+        <item>fastfood_restaurant</item>
+        <item>field/cultivated</item>
+        <item>field/wild</item>
+        <item>field_road</item>
+        <item>fire_escape</item>
+        <item>fire_station</item>
+        <item>fishpond</item>
+        <item>flea_market/indoor</item>
+        <item>florist_shop/indoor</item>
+        <item>food_court</item>
+        <item>football_field</item>
+        <item>forest/broadleaf</item>
+        <item>forest_path</item>
+        <item>forest_road</item>
+        <item>formal_garden</item>
+        <item>fountain</item>
+        <item>galley</item>
+        <item>garage/indoor</item>
+        <item>garage/outdoor</item>
+        <item>gas_station</item>
+        <item>gazebo/exterior</item>
+        <item>general_store/indoor</item>
+        <item>general_store/outdoor</item>
+        <item>gift_shop</item>
+        <item>glacier</item>
+        <item>golf_course</item>
+        <item>greenhouse/indoor</item>
+        <item>greenhouse/outdoor</item>
+        <item>grotto</item>
+        <item>gymnasium/indoor</item>
+        <item>hangar/indoor</item>
+        <item>hangar/outdoor</item>
+        <item>harbor</item>
+        <item>hardware_store</item>
+        <item>hayfield</item>
+        <item>heliport</item>
+        <item>highway</item>
+        <item>home_office</item>
+        <item>home_theater</item>
+        <item>hospital</item>
+        <item>hospital_room</item>
+        <item>hot_spring</item>
+        <item>hotel/outdoor</item>
+        <item>hotel_room</item>
+        <item>house</item>
+        <item>hunting_lodge/outdoor</item>
+        <item>ice_cream_parlor</item>
+        <item>ice_floe</item>
+        <item>ice_shelf</item>
+        <item>ice_skating_rink/indoor</item>
+        <item>ice_skating_rink/outdoor</item>
+        <item>iceberg</item>
+        <item>igloo</item>
+        <item>industrial_area</item>
+        <item>inn/outdoor</item>
+        <item>islet</item>
+        <item>jacuzzi/indoor</item>
+        <item>jail_cell</item>
+        <item>japanese_garden</item>
+        <item>jewelry_shop</item>
+        <item>junkyard</item>
+        <item>kasbah</item>
+        <item>kennel/outdoor</item>
+        <item>kindergarden_classroom</item>
+        <item>kitchen</item>
+        <item>lagoon</item>
+        <item>lake/natural</item>
+        <item>landfill</item>
+        <item>landing_deck</item>
+        <item>laundromat</item>
+        <item>lawn</item>
+        <item>lecture_room</item>
+        <item>legislative_chamber</item>
+        <item>library/indoor</item>
+        <item>library/outdoor</item>
+        <item>lighthouse</item>
+        <item>living_room</item>
+        <item>loading_dock</item>
+        <item>lobby</item>
+        <item>lock_chamber</item>
+        <item>locker_room</item>
+        <item>mansion</item>
+        <item>manufactured_home</item>
+        <item>market/indoor</item>
+        <item>market/outdoor</item>
+        <item>marsh</item>
+        <item>martial_arts_gym</item>
+        <item>mausoleum</item>
+        <item>medina</item>
+        <item>mezzanine</item>
+        <item>moat/water</item>
+        <item>mosque/outdoor</item>
+        <item>motel</item>
+        <item>mountain</item>
+        <item>mountain_path</item>
+        <item>mountain_snowy</item>
+        <item>movie_theater/indoor</item>
+        <item>museum/indoor</item>
+        <item>museum/outdoor</item>
+        <item>music_studio</item>
+        <item>natural_history_museum</item>
+        <item>nursery</item>
+        <item>nursing_home</item>
+        <item>oast_house</item>
+        <item>ocean</item>
+        <item>office</item>
+        <item>office_building</item>
+        <item>office_cubicles</item>
+        <item>oilrig</item>
+        <item>operating_room</item>
+        <item>orchard</item>
+        <item>orchestra_pit</item>
+        <item>pagoda</item>
+        <item>palace</item>
+        <item>pantry</item>
+        <item>park</item>
+        <item>parking_garage/indoor</item>
+        <item>parking_garage/outdoor</item>
+        <item>parking_lot</item>
+        <item>pasture</item>
+        <item>patio</item>
+        <item>pavilion</item>
+        <item>pet_shop</item>
+        <item>pharmacy</item>
+        <item>phone_booth</item>
+        <item>physics_laboratory</item>
+        <item>picnic_area</item>
+        <item>pier</item>
+        <item>pizzeria</item>
+        <item>playground</item>
+        <item>playroom</item>
+        <item>plaza</item>
+        <item>pond</item>
+        <item>porch</item>
+        <item>promenade</item>
+        <item>pub/indoor</item>
+        <item>racecourse</item>
+        <item>raceway</item>
+        <item>raft</item>
+        <item>railroad_track</item>
+        <item>rainforest</item>
+        <item>reception</item>
+        <item>recreation_room</item>
+        <item>repair_shop</item>
+        <item>residential_neighborhood</item>
+        <item>restaurant</item>
+        <item>restaurant_kitchen</item>
+        <item>restaurant_patio</item>
+        <item>rice_paddy</item>
+        <item>river</item>
+        <item>rock_arch</item>
+        <item>roof_garden</item>
+        <item>rope_bridge</item>
+        <item>ruin</item>
+        <item>runway</item>
+        <item>sandbox</item>
+        <item>sauna</item>
+        <item>schoolhouse</item>
+        <item>science_museum</item>
+        <item>server_room</item>
+        <item>shed</item>
+        <item>shoe_shop</item>
+        <item>shopfront</item>
+        <item>shopping_mall/indoor</item>
+        <item>shower</item>
+        <item>ski_resort</item>
+        <item>ski_slope</item>
+        <item>sky</item>
+        <item>skyscraper</item>
+        <item>slum</item>
+        <item>snowfield</item>
+        <item>soccer_field</item>
+        <item>stable</item>
+        <item>stadium/baseball</item>
+        <item>stadium/football</item>
+        <item>stadium/soccer</item>
+        <item>stage/indoor</item>
+        <item>stage/outdoor</item>
+        <item>staircase</item>
+        <item>storage_room</item>
+        <item>street</item>
+        <item>subway_station/platform</item>
+        <item>supermarket</item>
+        <item>sushi_bar</item>
+        <item>swamp</item>
+        <item>swimming_hole</item>
+        <item>swimming_pool/indoor</item>
+        <item>swimming_pool/outdoor</item>
+        <item>synagogue/outdoor</item>
+        <item>television_room</item>
+        <item>television_studio</item>
+        <item>temple/asia</item>
+        <item>throne_room</item>
+        <item>ticket_booth</item>
+        <item>topiary_garden</item>
+        <item>tower</item>
+        <item>toyshop</item>
+        <item>train_interior</item>
+        <item>train_station/platform</item>
+        <item>tree_farm</item>
+        <item>tree_house</item>
+        <item>trench</item>
+        <item>tundra</item>
+        <item>underwater/ocean_deep</item>
+        <item>utility_room</item>
+        <item>valley</item>
+        <item>vegetable_garden</item>
+        <item>veterinarians_office</item>
+        <item>viaduct</item>
+        <item>village</item>
+        <item>vineyard</item>
+        <item>volcano</item>
+        <item>volleyball_court/outdoor</item>
+        <item>waiting_room</item>
+        <item>water_park</item>
+        <item>water_tower</item>
+        <item>waterfall</item>
+        <item>watering_hole</item>
+        <item>wave</item>
+        <item>wet_bar</item>
+        <item>wheat_field</item>
+        <item>wind_farm</item>
+        <item>windmill</item>
+        <item>yard</item>
+        <item>youth_hostel</item>
+        <item>zen_garden</item>
+    </string-array>
+
+    <string-array name="grbage_sort_map">
+        <item>Recyclables</item>
+        <item>Dry garbage</item>
+        <item>Hazardous garbage</item>
+        <item>Wet garbage</item>
+    </string-array>
+
+    <string-array name="grbage_sort_detailed_map">
+        <item>Plastic bottle</item>
+        <item>Hat</item>
+        <item>Newspaper</item>
+        <item>Can</item>
+        <item>Glasswork</item>
+        <item>Glass Bottle</item>
+        <item>Cardboard</item>
+        <item>Basketball</item>
+        <item>Paper</item>
+        <item>Metalwork</item>
+        <item>Disposable chopsticks</item>
+        <item>Lighter</item>
+        <item>Broom</item>
+        <item>Old Mirror</item>
+        <item>Toothbrush</item>
+        <item>Dirty clothes</item>
+        <item>Shell</item>
+        <item>Ceramic Bowl</item>
+        <item>Paint Bucket</item>
+        <item>Battery</item>
+        <item>Fluorescent Light</item>
+        <item>Pill Capsule</item>
+        <item>Orange Peel</item>
+        <item>Leaf</item>
+        <item>Eggshell</item>
+        <item>Banana peel</item>
+    </string-array>
+
+
 </resources>

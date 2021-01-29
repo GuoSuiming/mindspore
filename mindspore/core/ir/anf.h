@@ -60,6 +60,7 @@ using ValueNodePtr = std::shared_ptr<ValueNode>;
 
 class CNode;
 using CNodePtr = std::shared_ptr<CNode>;
+using CNodePtrList = std::vector<CNodePtr>;
 
 class FuncGraph;
 using FuncGraphSet = OrderedSet<FuncGraphPtr>;
@@ -88,7 +89,7 @@ using ParamInfoPtr = std::shared_ptr<ParamInfo>;
 // intermediate_abstract: return the cached inferring abstract value.
 // Type/Shape: return the related info of this AnfNode. When this AnfNode is an
 // input of other CNodes, you can get the related info by this method.
-// debug_info: return the information retrived from parser. Set it using set_debug_info.
+// debug_info: return the information retrieved from parser. Set it using set_debug_info.
 // fullname_with_scope: return the detailed debug info.
 class AnfNode : public Base {
  public:
@@ -267,6 +268,21 @@ class CNode : public AnfNode {
 
   VarPtr func_graph_as_var() const { return func_graph_as_var_; }
 
+  const std::unordered_map<std::string, ValuePtr> &attrs() const { return attrs_; }
+  void set_attrs(const std::unordered_map<std::string, ValuePtr> &attrs) {
+    for (auto &attr : attrs) {
+      attrs_[attr.first] = attr.second;
+    }
+  }
+
+  void AddAttr(const std::string &name, const ValuePtr &attr) { attrs_[name] = attr; }
+  void EraseAttr(const std::string &name) { (void)attrs_.erase(name); }
+  ValuePtr GetAttr(const std::string &name) const {
+    auto iter = attrs_.find(name);
+    return iter == attrs_.cend() ? nullptr : iter->second;
+  }
+  bool HasAttr(const std::string &name) const { return attrs_.find(name) != attrs_.cend(); }
+
  private:
   std::vector<AnfNodePtr> inputs_;
   VarPtr func_graph_as_var_;
@@ -276,6 +292,7 @@ class CNode : public AnfNode {
   // output_value_ store cnode value and id in pynative mode
   std::vector<std::pair<ValuePtr, std::string>> inputs_value_;
   std::pair<ValuePtr, std::string> output_value_;
+  std::unordered_map<std::string, ValuePtr> attrs_;
 };
 
 // ANode represents the atomic node. It's derived Parameter and ValueNode.

@@ -28,6 +28,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 
 #define C2NUM 2
 #define C4NUM 4
@@ -47,6 +48,9 @@
 
 #define MSVALID(left, x, right) (MSMIN((MSMAX(left, x)), right))
 
+#define COMM_SHAPE_SIZE 4
+#define MAX_SHAPE_SIZE 8
+
 #define DIMENSION_4D 4
 #define DIMENSION_6D 6
 #define kInputIndex 0
@@ -59,9 +63,11 @@
 #define kNHWC_C 3
 #define kInputSize1 2
 #define kInputSize2 3
+#define MAX_LEN 256
 
 typedef enum LiteDataType {
   kDataTypeFloat,
+  kDataTypeFloat16,
   kDataTypeInt,
   kDataTypeInt8,
   KDataTypeBool,
@@ -77,6 +83,17 @@ typedef struct OpParameter {
   int type_;
   int thread_num_;
 } OpParameter;
+
+typedef struct QuantArg {
+  float scale_;
+  int32_t zp_;
+} QuantArg;
+
+typedef struct QuantMulArg {
+  int32_t multiplier_;
+  int left_shift_;
+  int right_shift_;
+} QuantMulArg;
 
 typedef enum ActType { ActType_No, ActType_Relu, ActType_Sigmod, ActType_Relu6, ActType_Prelu } ActType;
 typedef enum PadMode { Pad_No, Pad_Same, Pad_Valid } PadMode;

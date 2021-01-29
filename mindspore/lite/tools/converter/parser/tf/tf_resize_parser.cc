@@ -47,13 +47,17 @@ STATUS TFResizeParser::Parse(const tensorflow::NodeDef &tf_op,
     MS_LOG(ERROR) << "The align_corners attr should be specified";
     return RET_ERROR;
   }
-  attr->alignCorners = attr_value.b();
+  if (attr_value.b()) {
+    attr->coordinateTransformMode = schema::CoordinateTransformMode_ALIGN_CORNERS;
+  } else {
+    attr->coordinateTransformMode = schema::CoordinateTransformMode_ASYMMETRIC;
+  }
   if (tf_op.op() == "ResizeBilinear") {
     attr->method = schema::ResizeMethod_LINEAR;
   } else if (tf_op.op() == "ResizeNearestNeighbor") {
     attr->method = schema::ResizeMethod_NEAREST;
   } else {
-    attr->method = schema::ResizeMethod_UNKNOW;
+    attr->method = schema::ResizeMethod_UNKNOWN;
   }
   auto size_node = tf_node_map.at(tf_op.input(1));
   if (size_node == nullptr) {

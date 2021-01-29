@@ -93,16 +93,52 @@ std::string GetBaseNameForIR(int64_t stage_idx, const std::string &action_name) 
   return oss.str();
 }
 
-void CheckArgIsTensor(const ValuePtr &arg, std::size_t idx) {
-  MS_EXCEPTION_IF_NULL(arg);
-  auto tensor_arg = arg->cast<TensorPtr>();
-  if (tensor_arg == nullptr) {
-    MS_EXCEPTION(TypeError) << "For 'graph mode', the " << idx << "th arg: " << arg->ToString() << " is not a tensor.";
+AbstractBasePtr ArgsToAbstract(const ValuePtr &value) {
+  MS_EXCEPTION_IF_NULL(value);
+  bool broaden = value->isa<MetaTensor>();
+  return abstract::FromValue(value, broaden);
+}
+
+bool CheckArgValid(const py::handle &arg) {
+  if (py::isinstance<py::list>(arg) || py::isinstance<py::tuple>(arg)) {
+    auto vector_arg = py::cast<py::list>(arg);
+    return std::all_of(vector_arg.begin(), vector_arg.end(), CheckArgValid);
   }
-  if (tensor_arg->is_parameter()) {
-    MS_EXCEPTION(TypeError) << "The inputs could not be Parameter.";
+
+  if (py::isinstance<py::dict>(arg)) {
+    auto dict_arg = py::cast<py::dict>(arg);
+    return std::all_of(dict_arg.begin(), dict_arg.end(), [](const auto &pair) { return CheckArgValid(pair.second); });
+  }
+
+  return py::isinstance<py::int_>(arg) || py::isinstance<py::float_>(arg) || py::isinstance<Number>(arg) ||
+         (py::isinstance<Tensor>(arg) && !py::hasattr(arg, "__parameter__"));
+}
+
+void CheckArgsValid(const py::tuple &args) {
+  for (size_t i = 0; i < args.size(); i++) {
+    if (!CheckArgValid(args[i])) {
+      MS_EXCEPTION(TypeError)
+        << "The inputs types of the outermost network support bool, int, float, tensor, "
+           "mstype.Number(mstype.bool, mstype.int, mstype.float, mstype.uint), "
+           "and tuple or list containing only these types, and dict whose values are these types, but got "
+        << i << "th arg is " << py::str(args[i]);
+    }
   }
 }
+
+std::string GetCompileExceptionInfo() {
+  std::ostringstream oss;
+  trace::TraceGraphEval();
+  trace::GetEvalStackInfo(oss);
+  if (oss.str().empty()) {
+    DebugInfoPtr debug_info = TraceManager::GetParseOrResolveDebugInfo();
+    if (debug_info != nullptr) {
+      oss << "\n\n# " << trace::GetDebugInfo(debug_info);
+    }
+  }
+  return oss.str();
+}
+
 }  // namespace
 
 py::tuple GenerateKey(const std::string &name, const std::unordered_map<std::string, py::object> &defaults) {
@@ -117,8 +153,7 @@ py::tuple GenerateKey(const std::string &name, const std::unordered_map<std::str
     if (!parse::ConvertData(arg.second, &converted)) {
       MS_LOG(EXCEPTION) << "GenerateKey convert arg failed";
     }
-    bool broaden = converted->isa<Tensor>() || converted->isa<MetaTensor>();
-    args_spec.push_back(abstract::FromValue(converted, broaden));
+    args_spec.push_back(ArgsToAbstract(converted));
   }
   if (g_args_cache.count(args_spec) == 0) {
     static int64_t key = 0;
@@ -215,7 +250,7 @@ py::bytes ExecutorPy::GetFuncGraphProto(const std::string &phase, const std::str
   if (ir_type == IR_TYPE_ANF) {
     std::string proto_str = GetFuncGraphProtoString(fg_ptr);
     if (proto_str.empty()) {
-      MS_LOG(EXCEPTION) << "Graph proto is empty.";
+      MS_LOG(EXCEPTION) << "Export ANF format model failed.";
     }
     return proto_str;
   }
@@ -223,7 +258,7 @@ py::bytes ExecutorPy::GetFuncGraphProto(const std::string &phase, const std::str
   if (ir_type == IR_TYPE_ONNX) {
     std::string proto_str = GetOnnxProtoString(fg_ptr);
     if (proto_str.empty()) {
-      MS_LOG(EXCEPTION) << "Graph proto is empty.";
+      MS_LOG(EXCEPTION) << "Export ONNX format model failed.";
     }
     return proto_str;
   }
@@ -231,7 +266,7 @@ py::bytes ExecutorPy::GetFuncGraphProto(const std::string &phase, const std::str
   if (ir_type == IR_TYPE_MINDIR) {
     std::string proto_str = GetBinaryProtoString(fg_ptr);
     if (proto_str.empty()) {
-      MS_LOG(EXCEPTION) << "Graph proto is empty.";
+      MS_LOG(EXCEPTION) << "Export MINDIR format model failed.";
     }
     return proto_str;
   }
@@ -249,6 +284,12 @@ py::dict ExecutorPy::GetParameterLayout(const std::string &phase) {
 py::dict ExecutorPy::GetCNodeStrategy(const std::string &phase) {
   MS_LOG(DEBUG) << "GetCNodeStrategy!";
   return stra_dict_[phase];
+}
+
+py::list ExecutorPy::GetParallelParameterNameList(const std::string &phase) {
+  std::string param_graph = phase + kStepParallelGraph;
+  auto graph = GetFuncGraph(param_graph);
+  return mindspore::parallel::GetParallelParameterNameList(graph);
 }
 
 void ExecutorPy::SetCNodeStrategy(const std::string &name, const parallel::Strategys &strategy) {
@@ -458,11 +499,13 @@ bool ExecutorPy::CompileInner(const py::object &obj, const py::tuple &args, cons
     MS_LOG(ERROR) << "Arg phase must be string.";
     return false;
   }
-  // check the arg valid?
+  // check the function or net is valid
   if (py::isinstance<py::none>(obj)) {
     MS_LOG(ERROR) << "Find error: parse obj is None.";
     return false;
   }
+  // check the args of function or net is valid
+  CheckArgsValid(args);
 #ifdef ENABLE_GE
   GetGeBackendPolicy();
 #endif
@@ -484,11 +527,7 @@ bool ExecutorPy::CompileInner(const py::object &obj, const py::tuple &args, cons
     if (!succ) {
       MS_LOG(EXCEPTION) << "Args convert error";
     }
-    if (MsContext::GetInstance()->get_param<int>(MS_CTX_EXECUTION_MODE) == kGraphMode) {
-      CheckArgIsTensor(converted, i);
-    }
-    bool broaden = true;
-    args_spec.push_back(abstract::FromValue(converted, broaden));
+    args_spec.push_back(ArgsToAbstract(converted));
   }
 
   resource->set_args_spec(args_spec);
@@ -546,13 +585,10 @@ bool ExecutorPy::Compile(const py::object &obj, const py::tuple &args, const py:
     ret_value = CompileInner(obj, args, phase, use_vm);
   } catch (const py::error_already_set &ex) {
     // print function call stack info before release
-    std::ostringstream oss;
-    trace::TraceGraphEval();
-    trace::GetEvalStackInfo(oss);
-    // call py::print to output function call stack to STDOUT, in case of output the log to file, the user can see
-    // these info from screen, no need to open log file to find these info
-    py::print(oss.str());
-    MS_LOG(ERROR) << oss.str();
+    std::string exception_info = GetCompileExceptionInfo();
+    if (!exception_info.empty()) {
+      MS_LOG(ERROR) << exception_info;
+    }
     ReleaseResource(phase);
 
     // re-throw this exception to Python interpreter to handle it
@@ -813,9 +849,6 @@ py::object ExecutorPy::Run(const py::tuple &args, const py::object &phase) {
           ValuePtr converted = nullptr;
           if (!parse::ConvertData(args[i], &converted)) {
             MS_LOG(EXCEPTION) << "The " << i << "th arg convert failed.";
-          }
-          if (!converted->isa<tensor::Tensor>()) {
-            MS_EXCEPTION(TypeError) << "The " << i << "th arg: " << converted->ToString() << " is not tensor.";
           }
         }
       }

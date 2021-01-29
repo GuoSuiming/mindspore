@@ -23,6 +23,7 @@ j* you may not use this file except in compliance with the License.
 #include <memory>
 #include <set>
 #include <string>
+#include <utility>
 #include <type_traits>
 #include "src/common/log_adapter.h"
 #include "src/runtime/opencl/opencl_wrapper.h"
@@ -33,6 +34,7 @@ namespace mindspore::lite::opencl {
 
 enum GpuType { OTHER = 0, ADRENO = 1, MALI = 2, MALI_T = 3, MALI_G = 4 };
 enum TuningMode { DEFAULT = 0, FAST = 1, EXTREME = 2 };
+enum InitState { UnInit = 0, InitSuccess = 1, InitFailed = 2 };
 
 struct GpuInfo {
   GpuType type = OTHER;
@@ -54,7 +56,7 @@ class OpenCLRuntime {
   cl::Context *Context();
   cl::Device *Device();
   OpenCLAllocator *GetAllocator() { return allocator_; }
-  cl::CommandQueue *GetDefaultCommandQueue() { return default_command_queue_; }
+  cl::CommandQueue *GetDefaultCommandQueue() { return profiling_ ? profiling_command_queue_ : default_command_queue_; }
   uint64_t DeviceGlobalMemoryCacheSize() const;
   int DeviceMaxWorkGroupSize() const;
   uint32_t DeviceComputeUnits() const;
@@ -81,7 +83,7 @@ class OpenCLRuntime {
         auto svm_capabilities = GetSVMCapabilities();
         if (svm_capabilities) {
           MS_LOG(DEBUG) << "Set kernel arg[" << index << "] SVM pointer " << value;
-          return kernel.setArg(index, value);
+          return clSetKernelArgSVMPointer(kernel.get(), index, value);
         }
         cl::Buffer *buffer = reinterpret_cast<cl::Buffer *>(allocator_->GetBuffer(value));
         MS_LOG(DEBUG) << "Set kernel arg[" << index << "] OpenCL Buffer " << buffer << ", host_ptr: " << value;
@@ -99,7 +101,7 @@ class OpenCLRuntime {
         return kernel.setArg(index, *image);
       }
       default:
-        MS_LOG(ERROR) << "Unsupport opencl memory type: " << static_cast<int>(mem_type);
+        MS_LOG(ERROR) << "Unsupported opencl memory type: " << static_cast<int>(mem_type);
         return CL_IMAGE_FORMAT_NOT_SUPPORTED;
     }
   }
@@ -113,12 +115,15 @@ class OpenCLRuntime {
   cl::Program CreateProgramFromIL(const std::vector<char> &binary, const std::string &flag);
   cl::Program CreateProgramFromBinary(const std::vector<unsigned char> &binary, const std::string &flag);
   cl::Kernel GetKernelFromBinary(const std::string &kernel_name);
-  std::vector<std::vector<unsigned char>> GetProgramBinaries(const cl::Program &program);
+  std::vector<unsigned char> GetProgramBinary(const cl::Program &program);
   bool LoadSource(const std::string &program_name, const std::string &source);
   int BuildKernel(cl::Kernel &kernel, const std::string &program_name, const std::string &kernel_name,
-                  const std::set<std::string> &build_options = {});
+                  const std::vector<std::string> &build_options_ext = {});
   int RunKernel(const cl::Kernel &kernel, const cl::NDRange &global, const cl::NDRange &local,
                 cl::CommandQueue *command_queue = nullptr, cl::Event *event = nullptr);
+  int ReadOrWriteImage(void *buffer, void *data, bool is_read);
+  int ReadImage(void *buffer, void *dst_data);
+  int WriteImage(void *buffer, void *src_data);
   bool CopyDeviceMemToHost(void *dst, const void *src, size_t size, cl::CommandQueue *command_queue = nullptr,
                            bool sync = false) const;
   bool CopyHostMemToDevice(const void *dst, const void *src, size_t size, cl::CommandQueue *command_queue = nullptr,
@@ -143,23 +148,22 @@ class OpenCLRuntime {
   void SetTuningMode(TuningMode mode) { tuning_mode_ = mode; }
   TuningMode GetTuningMode() const { return tuning_mode_; }
 
-  void InitGpuCache();
-  int LoadCache(const void *buf);
-  void StoreCache();
   bool isProfiling() const { return profiling_; }
   void SetProfiling(bool profiling) { profiling_ = profiling; }
 
  private:
   static OpenCLRuntime *GetInstance();
   static void DeleteInstance();
-  OpenCLRuntime();
+  OpenCLRuntime() = default;
   GpuInfo ParseGpuInfo(std::string device_name, std::string device_version);
 
   bool LoadProgram(const std::string &program_name, cl::Program *program);
   bool BuildProgram(const std::string &build_options, const cl::Program &program);
+  int InitGPUDevice(std::vector<cl::Platform> &platforms);
+  int InitQueue(std::vector<cl::Platform> &platforms);
 
  private:
-  static bool init_done_;
+  static InitState init_state_;
   static size_t instance_count_;
   static OpenCLRuntime *ocl_runtime_instance_;
   cl::CommandQueue *default_command_queue_{nullptr};
@@ -167,15 +171,15 @@ class OpenCLRuntime {
   cl::Context *context_{nullptr};
   cl::Device *device_{nullptr};
   OpenCLAllocator *allocator_{nullptr};
-  std::map<std::string, cl::Program> program_map_;
-  cl::Program binary_program_{0};
+  std::map<std::pair<std::string, std::string>, cl::Program> program_map_;
+  cl::Program binary_program_;
   uint64_t global_memery_cachesize_{0};
   uint64_t global_memery_size_{0};
   uint64_t max_alloc_size_{0};
   int max_work_group_size_{1};
   uint32_t compute_units_{0};
   uint32_t max_freq_{0};
-  std::string default_build_opts_{""};
+  std::string default_build_option_{"-cl-mad-enable -cl-fast-relaxed-math -Werror"};
   GpuInfo gpu_info_;
   bool support_fp16_{false};
   bool fp16_enable_{false};
@@ -184,13 +188,24 @@ class OpenCLRuntime {
   cl_uint image_pitch_align_{0};
   std::vector<size_t> max_work_item_sizes_;
   void *handle_{nullptr};
-  std::map<std::string, std::vector<unsigned char>> binary_map_;
-  std::string cache_path_{"/data/local/tmp/opencl_cache"};
-  const std::string version_{"V0.1"};
-  bool need_write_{false};
-  bool enable_cache_{false};
   TuningMode tuning_mode_{TuningMode::DEFAULT};
+#if MS_OPENCL_PROFILE
+  bool profiling_{true};
+#else
   bool profiling_{false};
+#endif
+  // for cache
+ private:
+  void LoadCache();
+  void StoreCache();
+#ifdef MS_OPENCL_BINARY_CACHE
+  bool enable_cache_{true};
+#else
+  bool enable_cache_{false};
+#endif
+  bool flush_cache_{false};
+  std::string cache_path_{"/data/local/tmp/.opencl_cache"};
+  const std::string cache_version_{"V0.1"};
 };
 
 class OpenCLRuntimeWrapper {

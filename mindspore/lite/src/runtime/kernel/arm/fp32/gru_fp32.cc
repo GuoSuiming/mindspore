@@ -18,6 +18,7 @@
 #include "schema/model_generated.h"
 #include "src/kernel_registry.h"
 #include "include/errorcode.h"
+#include "nnacl/fp32/gru_fp32.h"
 
 using mindspore::kernel::KERNEL_ARCH::kCPU;
 using mindspore::lite::KernelRegistrar;
@@ -70,11 +71,21 @@ int GruCPUKernel::InitBuffer() {
 int GruCPUKernel::InitWeightBias() {
   auto weight_gate = in_tensors_.at(1);
   MS_ASSERT(weight_gate != nullptr);
-  weight_g_ptr_ = reinterpret_cast<float *>(weight_gate->data_c());
+  weight_g_ptr_ = reinterpret_cast<float *>(malloc(weight_gate->ElementsNum() * sizeof(float)));
+  if (weight_g_ptr_ == nullptr) {
+    MS_LOG(ERROR) << "GruCPUKernel malloc weight_g_ptr_ error.";
+    return RET_ERROR;
+  }
+  memcpy(weight_g_ptr_, weight_gate->data_c(), weight_gate->ElementsNum() * sizeof(float));
 
   auto weight_recu = in_tensors_.at(2);
   MS_ASSERT(weight_recu != nullptr);
-  weight_r_ptr_ = reinterpret_cast<float *>(weight_recu->data_c());
+  weight_r_ptr_ = reinterpret_cast<float *>(malloc(weight_recu->ElementsNum() * sizeof(float)));
+  if (weight_r_ptr_ == nullptr) {
+    MS_LOG(ERROR) << "GruCPUKernel malloc weight_r_ptr_ error.";
+    return RET_ERROR;
+  }
+  memcpy(weight_r_ptr_, weight_recu->data_c(), weight_recu->ElementsNum() * sizeof(float));
 
   int bias_num = gru_parm_->bidirectional_ ? 2 * 3 * gru_parm_->hidden_size_ : 3 * gru_parm_->hidden_size_;
   bias_ptr_ = reinterpret_cast<float *>(malloc(bias_num * sizeof(float)));

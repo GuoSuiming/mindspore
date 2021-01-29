@@ -1,4 +1,4 @@
-# Copyright 2020 Huawei Technologies Co., Ltd
+# Copyright 2021 Huawei Technologies Co., Ltd
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,9 +33,9 @@ from .array_ops import (Argmax, Argmin, Cast, Concat, Pack, Unpack,
                         Transpose, TruncatedNormal, TupleToArray, UnsortedSegmentMin, UnsortedSegmentMax,
                         UnsortedSegmentProd, UnsortedSegmentSum, SpaceToDepth, DepthToSpace, SpaceToBatch, BatchToSpace,
                         SpaceToBatchND, BatchToSpaceND, BroadcastTo, InplaceUpdate, ReverseSequence, EmbeddingLookup,
-                        Unique, GatherD, Identity)
+                        Unique, GatherD, Identity, Range)
 from .comm_ops import (AllGather, AllReduce, _AlltoAll, AllSwap, ReduceScatter, Broadcast,
-                       _MirrorOperator, ReduceOp, _VirtualDataset,
+                       _MirrorOperator, _MirrorMiniStepOperator, ReduceOp, _VirtualDataset,
                        _VirtualDiv, _GetTensorSlice,
                        _HostAllGather, _HostReduceScatter)
 from .debug_ops import (ImageSummary, InsertGradientOf, HookBackward, ScalarSummary,
@@ -48,7 +48,7 @@ from .math_ops import (Abs, ACos, Asin, Asinh, AddN, AccumulateNV2, AssignAdd, A
                        ReduceMax, ReduceMin, ReduceMean, ReduceSum, ReduceAll, ReduceProd, CumProd, ReduceAny,
                        Cos, Div, DivNoNan, Equal, EqualCount, Exp, Expm1, Erf, Erfc, Floor, FloorDiv, FloorMod, Ceil,
                        Acosh, Greater, GreaterEqual, Less, LessEqual, Log, Log1p, LogicalAnd, Mod,
-                       LogicalNot, LogicalOr, MatMul, Maximum,
+                       LogicalNot, LogicalOr, MatMul, Maximum, MulNoNan,
                        Minimum, Mul, Neg, NMSWithMask, NotEqual,
                        NPUAllocFloatStatus, NPUClearFloatStatus, LinSpace,
                        NPUGetFloatStatus, Pow, RealDiv, IsNan, IsInf, IsFinite, FloatStatus,
@@ -63,16 +63,16 @@ from .random_ops import (RandomChoiceWithMask, StandardNormal, Gamma, Poisson, U
 from .nn_ops import (LSTM, SGD, Adam, FusedSparseAdam, FusedSparseLazyAdam, AdamNoUpdateParam, ApplyMomentum, BatchNorm,
                      BiasAdd, Conv2D,
                      DepthwiseConv2dNative,
-                     DropoutDoMask, Dropout,
-                     DropoutGenMask, Flatten, FusedBatchNorm, FusedBatchNormEx, BNTrainingReduce, BNTrainingUpdate,
+                     DropoutDoMask, Dropout, Dropout3d, DropoutGenMask, Flatten,
+                     FusedBatchNorm, FusedBatchNormEx, InstanceNorm, BNTrainingReduce, BNTrainingUpdate,
                      Gelu, FastGelu, Elu,
                      GetNext, L2Normalize, LayerNorm, L2Loss, CTCLoss, CTCGreedyDecoder,
                      LogSoftmax,
                      MaxPool, DataFormatDimMap,
                      AvgPool, Conv2DBackpropInput, ComputeAccidentalHits,
-                     MaxPoolWithArgmax, OneHot, Pad, MirrorPad, PReLU, ReLU, ReLU6, ReLUV2, HSwish, HSigmoid,
-                     ResizeBilinear, Sigmoid,
-                     SigmoidCrossEntropyWithLogits,
+                     MaxPoolWithArgmax, OneHot, Pad, MirrorPad, Mish, PReLU, ReLU, ReLU6, ReLUV2, HSwish, HSigmoid,
+                     ResizeBilinear, Sigmoid, SeLU,
+                     SigmoidCrossEntropyWithLogits, NLLLoss,
                      SmoothL1Loss, Softmax, Softsign, Softplus, LRN, RNNTLoss, DynamicRNN, DynamicGRUV2,
                      SoftmaxCrossEntropyWithLogits, ROIAlign,
                      SparseSoftmaxCrossEntropyWithLogits, Tanh,
@@ -147,6 +147,7 @@ __all__ = [
     'SoftmaxCrossEntropyWithLogits',
     'ROIAlign',
     'SparseSoftmaxCrossEntropyWithLogits',
+    'NLLLoss',
     'SGD',
     'ApplyMomentum',
     'ExpandDims',
@@ -193,6 +194,9 @@ __all__ = [
     'ZerosLike',
     'Select',
     'Split',
+    'Mish',
+    'SeLU',
+    'MulNoNan',
     'ReLU',
     'ReLU6',
     'Elu',
@@ -402,6 +406,7 @@ __all__ = [
     "ReLUV2",
     "SparseToDense",
     "MatrixInverse",
+    "Range",
 ]
 
 __all__.sort()

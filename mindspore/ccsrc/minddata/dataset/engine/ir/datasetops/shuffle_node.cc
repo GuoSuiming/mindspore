@@ -43,7 +43,7 @@ void ShuffleNode::Print(std::ostream &out) const {
 }
 
 // Function to build the ShuffleOp
-Status ShuffleNode::Build(std::vector<std::shared_ptr<DatasetOp>> *node_ops) {
+Status ShuffleNode::Build(std::vector<std::shared_ptr<DatasetOp>> *const node_ops) {
   node_ops->push_back(std::make_shared<ShuffleOp>(shuffle_size_, shuffle_seed_, connector_que_size_, reset_every_epoch_,
                                                   rows_per_buffer_));
   return Status::OK();
@@ -61,5 +61,12 @@ Status ShuffleNode::ValidateParams() {
   return Status::OK();
 }
 
+Status ShuffleNode::to_json(nlohmann::json *out_json) {
+  nlohmann::json args;
+  args["buffer_size"] = shuffle_size_;
+  args["reshuffle_each_epoch"] = reset_every_epoch_;
+  *out_json = args;
+  return Status::OK();
+}
 }  // namespace dataset
 }  // namespace mindspore

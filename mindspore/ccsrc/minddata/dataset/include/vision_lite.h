@@ -26,10 +26,6 @@
 #include "minddata/dataset/include/transforms.h"
 #include "minddata/dataset/include/status.h"
 
-#ifdef ENABLE_ANDROID
-#include "minddata/dataset/kernels/image/rotate_op.h"
-#endif
-
 namespace mindspore {
 namespace dataset {
 
@@ -42,20 +38,14 @@ constexpr char kCropOperation[] = "Crop";
 constexpr char kDecodeOperation[] = "Decode";
 constexpr char kNormalizeOperation[] = "Normalize";
 constexpr char kResizeOperation[] = "Resize";
-
-#ifdef ENABLE_ANDROID
 constexpr char kRotateOperation[] = "Rotate";
-#endif
 // Transform Op classes (in alphabetical order)
 class CenterCropOperation;
 class CropOperation;
 class DecodeOperation;
 class NormalizeOperation;
 class ResizeOperation;
-
-#ifdef ENABLE_ANDROID
 class RotateOperation;
-#endif
 
 /// \brief Function to create a CenterCrop TensorOperation.
 /// \notes Crops the input image at the center to the given size.
@@ -98,12 +88,10 @@ std::shared_ptr<NormalizeOperation> Normalize(std::vector<float> mean, std::vect
 /// \return Shared pointer to the current TensorOperation.
 std::shared_ptr<ResizeOperation> Resize(std::vector<int32_t> size,
                                         InterpolationMode interpolation = InterpolationMode::kLinear);
-#ifdef ENABLE_ANDROID
 /// \brief Applies an rotate transformation to an image.
 /// \notes Rotate the input image using a specified angle id.
 /// \return Shared pointer to the current TensorOperation.
 std::shared_ptr<RotateOperation> Rotate();
-#endif
 
 class CenterCropOperation : public TensorOperation {
  public:
@@ -116,6 +104,8 @@ class CenterCropOperation : public TensorOperation {
   Status ValidateParams() override;
 
   std::string Name() const override { return kCenterCropOperation; }
+
+  Status to_json(nlohmann::json *out_json) override;
 
  private:
   std::vector<int32_t> size_;
@@ -149,6 +139,8 @@ class DecodeOperation : public TensorOperation {
 
   std::string Name() const override { return kDecodeOperation; }
 
+  Status to_json(nlohmann::json *out_json) override;
+
  private:
   bool rgb_;
 };
@@ -164,6 +156,8 @@ class NormalizeOperation : public TensorOperation {
   Status ValidateParams() override;
 
   std::string Name() const override { return kNormalizeOperation; }
+
+  Status to_json(nlohmann::json *out_json) override;
 
  private:
   std::vector<float> mean_;
@@ -183,12 +177,13 @@ class ResizeOperation : public TensorOperation {
 
   std::string Name() const override { return kResizeOperation; }
 
+  Status to_json(nlohmann::json *out_json) override;
+
  private:
   std::vector<int32_t> size_;
   InterpolationMode interpolation_;
 };
 
-#ifdef ENABLE_ANDROID
 class RotateOperation : public TensorOperation {
  public:
   RotateOperation();
@@ -204,9 +199,8 @@ class RotateOperation : public TensorOperation {
   void setAngle(uint64_t angle_id);
 
  private:
-  std::shared_ptr<RotateOp> rotate_op;
+  std::shared_ptr<TensorOp> rotate_op;
 };
-#endif
 }  // namespace vision
 }  // namespace dataset
 }  // namespace mindspore

@@ -18,11 +18,13 @@ MNIST, Cifar10/100, Manifest, MindRecord, and more. This module loads data with
 high performance and parses data precisely. Some of the operations that are
 provided to users to preprocess data include shuffle, batch, repeat, map, and zip.
 """
+import atexit
 import glob
 import json
 import math
 import os
 import signal
+import time
 import uuid
 import multiprocessing
 import queue
@@ -53,9 +55,10 @@ from .validators import check_batch, check_shuffle, check_map, check_filter, che
     check_tfrecorddataset, check_vocdataset, check_cocodataset, check_celebadataset, check_minddataset, \
     check_generatordataset, check_sync_wait, check_zip_dataset, check_add_column, check_textfiledataset, check_concat, \
     check_random_dataset, check_split, check_bucket_batch_by_length, check_cluedataset, check_save, check_csvdataset, \
-    check_paddeddataset, check_tuple_iterator, check_dict_iterator, check_schema, check_to_device_send, replace_none
+    check_paddeddataset, check_tuple_iterator, check_dict_iterator, check_schema, check_to_device_send
 from ..core.config import get_callback_timeout, _init_device_info
 from ..core.datatypes import mstype_to_detype, mstypelist_to_detypelist
+from ..core.validator_helpers import replace_none
 
 try:
     context = import_module("mindspore.context")
@@ -78,7 +81,7 @@ def zip(datasets):
             The number of datasets must be more than 1.
 
     Returns:
-        Dataset, ZipDataset.
+        ZipDataset, dataset zipped.
 
     Raises:
         ValueError: If the number of datasets is 1.
@@ -147,8 +150,8 @@ class Dataset:
         Internal method to create an IR tree.
 
         Returns:
-            ir_tree, The onject of the IR tree.
-            dataset, the root dataset of the IR tree.
+            DatasetNode, the root node of the IR tree.
+            Dataset, the root dataset of the IR tree.
         """
         parent = self.parent
         self.parent = []
@@ -163,7 +166,7 @@ class Dataset:
         Internal method to parse the API tree into an IR tree.
 
         Returns:
-            DatasetNode, The root of the IR tree.
+            DatasetNode, the root node of the IR tree.
         """
         if len(self.parent) > 1:
             raise ValueError("The data pipeline is not a tree (i.e., one node has 2 consumers)")
@@ -195,11 +198,23 @@ class Dataset:
         Args:
 
         Returns:
-            Python dictionary.
+            dict, attributes related to the current class.
         """
         args = dict()
         args["num_parallel_workers"] = self.num_parallel_workers
         return args
+
+    def to_json(self, filename=""):
+        """
+        Serialize a pipeline into JSON string and dump into file if filename is provided.
+
+        Args:
+            filename (str): filename of json file to be saved as
+
+        Returns:
+            str, JSON string of the pipeline.
+        """
+        return json.loads(self.parse_tree().to_json(filename))
 
     @check_bucket_batch_by_length
     def bucket_batch_by_length(self, column_names, bucket_boundaries, bucket_batch_sizes,
@@ -243,6 +258,9 @@ class Dataset:
                 (default=False).
             drop_remainder (bool, optional): If True, will drop the last batch for each
                 bucket if it is not a full batch (default=False).
+
+        Returns:
+            BucketBatchByLengthDataset, dataset bucketed and batched by length.
 
         Examples:
             >>> import mindspore.dataset as ds
@@ -355,7 +373,10 @@ class Dataset:
         Args:
             condition_name (str): The condition name that is used to toggle sending next row.
             num_batch (int): the number of batches without blocking at the start of each epoch.
-            callback (function): The callback funciton that will be invoked when sync_update is called.
+            callback (function): The callback function that will be invoked when sync_update is called.
+
+        Returns:
+            SyncWaitDataset, dataset added a blocking condition.
 
         Raises:
             RuntimeError: If condition name already exists.
@@ -378,7 +399,7 @@ class Dataset:
 
         1. Make a shuffle buffer that contains the first buffer_size rows.
         2. Randomly select an element from the shuffle buffer to be the next row
-           propogated to the child node.
+           propagated to the child node.
         3. Get the next row (if any) from the parent node and put it in the shuffle buffer.
         4. Repeat steps 2 and 3 until there are no more rows left in the shuffle buffer.
 
@@ -420,7 +441,7 @@ class Dataset:
                 return a 'Dataset'.
 
         Returns:
-            Dataset, applied by the function.
+            Dataset, dataset applied by the function.
 
         Examples:
             >>> import mindspore.dataset as ds
@@ -636,7 +657,7 @@ class Dataset:
                 in parallel (default=None).
 
         Returns:
-            FilterDataset, dataset filter.
+            FilterDataset, dataset filtered.
 
         Examples:
             >>> import mindspore.dataset as ds
@@ -734,6 +755,9 @@ class Dataset:
         """
         Internal method called by split to calculate absolute split sizes and to
         do some error checking after calculating absolute split sizes.
+
+        Returns:
+            int, absolute split sizes of the dataset.
         """
         # Call get_dataset_size here and check input here because
         # don't want to call this once in check_split and another time in
@@ -1001,7 +1025,7 @@ class Dataset:
                 is specified and special_first is set to default, special_tokens will be prepended
 
         Returns:
-            Vocab node
+            Vocab, vocab built from the dataset.
 
         Example:
             >>> import mindspore.dataset as ds
@@ -1060,7 +1084,7 @@ class Dataset:
             params(dict): contains more optional parameters of sentencepiece library
 
         Returns:
-            SentencePieceVocab node
+            SentencePieceVocab, vocab built from the dataset.
 
         Example:
             >>> import mindspore.dataset as ds
@@ -1101,7 +1125,7 @@ class Dataset:
                                    return a preprogressing 'Dataset'.
 
         Returns:
-            Dataset, applied by the function.
+            Dataset, dataset applied by the function.
 
         Examples:
             >>> import mindspore.dataset as ds
@@ -1145,7 +1169,7 @@ class Dataset:
             If device is Ascend, features of data will be transferred one by one. The limitation
             of data transmission per time is 256M.
 
-        Return:
+        Returns:
             TransferDataset, dataset for transferring.
         """
         return self.to_device(send_epoch_end=send_epoch_end, create_data_info_queue=create_data_info_queue)
@@ -1273,7 +1297,7 @@ class Dataset:
                 use this param to select the conversion method, only take False for better performance (default=True).
 
         Returns:
-            Iterator, list of ndarrays.
+            TupleIterator, tuple iterator over the dataset.
 
         Examples:
             >>> import mindspore.dataset as ds
@@ -1308,7 +1332,7 @@ class Dataset:
                 if output_numpy=False, iterator will output MSTensor (default=False).
 
         Returns:
-            Iterator, dictionary of column name-ndarray pair.
+            DictIterator, dictionary iterator over the dataset.
 
         Examples:
             >>> import mindspore.dataset as ds
@@ -1337,6 +1361,9 @@ class Dataset:
     def input_indexs(self):
         """
         Get Input Index Information
+
+        Returns:
+            tuple, tuple of the input index information.
 
         Examples:
             >>> import mindspore.dataset as ds
@@ -1395,6 +1422,9 @@ class Dataset:
     def get_col_names(self):
         """
         Get names of the columns in the dataset
+
+        Returns:
+            list, list of column names in the dataset.
         """
         if self._col_names is None:
             runtime_getter = self._init_tree_getters()
@@ -1405,8 +1435,8 @@ class Dataset:
         """
         Get the shapes of output data.
 
-        Return:
-            List, list of shapes of each column.
+        Returns:
+            list, list of shapes of each column.
         """
         if self.saved_output_shapes is None:
             runtime_getter = self._init_tree_getters()
@@ -1418,8 +1448,8 @@ class Dataset:
         """
         Get the types of output data.
 
-        Return:
-            List of data types.
+        Returns:
+            list, list of data types.
         """
         if self.saved_output_types is None:
             runtime_getter = self._init_tree_getters()
@@ -1431,8 +1461,8 @@ class Dataset:
         """
         Get the number of batches in an epoch.
 
-        Return:
-            Number, number of batches.
+        Returns:
+            int, number of batches.
         """
         if self.dataset_size is None:
             runtime_getter = self._init_size_getter()
@@ -1443,8 +1473,8 @@ class Dataset:
         """
         Get the number of classes in a dataset.
 
-        Return:
-            Number, number of classes.
+        Returns:
+            int, number of classes.
         """
         if self._num_classes is None:
             runtime_getter = self._init_tree_getters()
@@ -1497,8 +1527,8 @@ class Dataset:
         """
         Get the size of a batch.
 
-        Return:
-            Number, the number of data in a batch.
+        Returns:
+            int, the number of data in a batch.
         """
         if self._batch_size is None:
             runtime_getter = self._init_tree_getters()
@@ -1511,8 +1541,8 @@ class Dataset:
         """
         Get the replication times in RepeatDataset else 1.
 
-        Return:
-            Number, the count of repeat.
+        Returns:
+            int, the count of repeat.
         """
         if self._repeat_count is None:
             runtime_getter = self._init_tree_getters()
@@ -1526,8 +1556,8 @@ class Dataset:
         Get the class index.
 
         Returns:
-            Dict, A str-to-int mapping from label name to index.
-            Dict, A str-to-list<int> mapping from label name to index for Coco ONLY. The second number
+            dict, a str-to-int mapping from label name to index.
+            dict, a str-to-list<int> mapping from label name to index for Coco ONLY. The second number
             in the list is used to indicate the super category
         """
         if self.children:
@@ -1574,7 +1604,7 @@ class SourceDataset(Dataset):
             patterns (Union[str, list[str]]): String or list of patterns to be searched.
 
         Returns:
-            List, files.
+            list, list of files.
         """
 
         if not isinstance(patterns, list):
@@ -1620,8 +1650,7 @@ class MappableDataset(SourceDataset):
     def add_sampler(self, new_sampler):
         # note: By adding a sampler, the sampled IDs will flow to new_sampler
         # after first passing through the current samplers attached to this dataset.
-        if self.dataset_size is not None:
-            self.dataset_size = None
+        self.dataset_size = None
         new_sampler.add_child(self.sampler)
         self.sampler = new_sampler
 
@@ -1631,9 +1660,6 @@ class MappableDataset(SourceDataset):
 
         Args:
             new_sampler (Sampler): The sampler to use for the current dataset.
-
-        Returns:
-            Dataset, that uses new_sampler.
 
         Examples:
             >>> import mindspore.dataset as ds
@@ -1650,8 +1676,7 @@ class MappableDataset(SourceDataset):
             raise TypeError("Input sampler can not be None.")
         if not isinstance(new_sampler, (samplers.BuiltinSampler, samplers.Sampler)):
             raise TypeError("Input sampler is not an instance of a sampler.")
-        if self.dataset_size is not None:
-            self.dataset_size = None
+        self.dataset_size = None
 
         self.sampler = self.sampler.child_sampler
         self.add_sampler(new_sampler)
@@ -1692,7 +1717,7 @@ class MappableDataset(SourceDataset):
                     - The sum of split sizes < K, the difference will be added to the first split.
 
                     - The sum of split sizes > K, the difference will be removed from the first large
-                      enough split such that it will have atleast 1 row after removing the difference.
+                      enough split such that it will have at least 1 row after removing the difference.
 
             randomize (bool, optional): Determines whether or not to split the data randomly (default=True).
                 If True, the data will be randomly split. Otherwise, each split will be created with
@@ -1895,8 +1920,9 @@ class BatchDataset(Dataset):
 
         Args:
              dataset (Dataset): Dataset to be checked.
-        Return:
-            True or False.
+
+        Returns:
+            bool, whether repeat is used before batch.
         """
         if isinstance(dataset, RepeatDataset):
             return True
@@ -1965,6 +1991,7 @@ class BatchDataset(Dataset):
             # Wrap per_batch_map into _PythonCallable
             self.per_batch_map = _PythonCallable(self.per_batch_map, idx, self.process_pool)
             self.hook = _ExceptHookHandler()
+            atexit.register(_mp_pool_exit_preprocess)
 
     def __del__(self):
         if hasattr(self, 'process_pool') and self.process_pool is not None:
@@ -1980,18 +2007,12 @@ class BatchInfo(cde.CBatchInfo):
     def get_batch_num(self):
         """
         Return the batch number of the current batch.
-
-        Return:
-            Number, number of the current batch.
         """
         return
 
     def get_epoch_num(self):
         """
         Return the epoch number of the current batch.
-
-        Return:
-            Number, number of the current epoch.
         """
         return
 
@@ -2040,8 +2061,8 @@ class BlockReleasePair:
         """
         Function for handing blocking condition.
 
-        Return:
-            True
+        Returns:
+            bool, True.
         """
         with self.cv:
             # if disable is true, the always evaluate to true
@@ -2130,8 +2151,9 @@ class SyncWaitDataset(Dataset):
 
         Args:
              dataset (Dataset): Dataset to be checked.
-        Return:
-            True or False.
+
+        Returns:
+            bool, whether sync_wait is used before batch.
         """
         if isinstance(dataset, BatchDataset):
             return True
@@ -2213,7 +2235,7 @@ class _PythonCallable:
         self.idx = idx
 
     def __call__(self, *args):
-        if self.pool is not None and self.pool._state == 0: # pylint: disable=W0212
+        if self.pool is not None and self.pool._state == 0 and check_iterator_cleanup() is False:  # pylint: disable=W0212
             # This call will send the tensors along with Python callable index to the process pool.
             # Block, yield GIL. Current thread will reacquire GIL once result is returned.
             result = self.pool.apply_async(_pyfunc_worker_exec, [self.idx, *args])
@@ -2233,13 +2255,22 @@ class _PythonCallable:
         return self.py_callable(*args)
 
 
+def _mp_pool_exit_preprocess():
+    if check_iterator_cleanup() is False:
+        logger.info("Execution preprocessing process before map exit.")
+        # Set the iterator_cleanup flag to True before exiting, and wait 3s for all apply_async
+        # applied to the multiprocessing task to prevent multiprocessing from hang when exiting
+        _set_iterator_cleanup()
+        time.sleep(3)
+
+
 class _ExceptHookHandler:
     def __init__(self):
         sys.excepthook = self.__handler_exception
 
     def __handler_exception(self, type, value, tb):
         logger.error("Uncaught exception: ", exc_info=(type, value, tb))
-        _set_iterator_cleanup()
+        _mp_pool_exit_preprocess()
 
 
 class MapDataset(Dataset):
@@ -2320,10 +2351,16 @@ class MapDataset(Dataset):
 
     def parse(self, children=None):
         column_order = replace_none(self.column_order, [])
+        operations = []
+        for op in self.operations:
+            if op and getattr(op, 'parse', None):
+                operations.append(op.parse())
+            else:
+                operations.append(op)
 
         cc = self.cache.cache_client if self.cache else None
         callbacks = [cb.create_runtime_obj() for cb in self.callbacks] if self.callbacks else []
-        return cde.MapNode(children[0], self.operations, self.input_columns, self.output_columns, column_order, cc,
+        return cde.MapNode(children[0], operations, self.input_columns, self.output_columns, column_order, cc,
                            callbacks).SetNumWorkers(self.num_parallel_workers)
 
     def get_args(self):
@@ -2400,11 +2437,13 @@ class MapDataset(Dataset):
                         iter_specific_operations.append(op)
                 self.operations = iter_specific_operations
                 self.hook = _ExceptHookHandler()
+                atexit.register(_mp_pool_exit_preprocess)
 
     def __del__(self):
         if hasattr(self, 'process_pool') and self.process_pool is not None:
             logger.info("Map process pool is being terminated.")
             self.process_pool.close()
+            self.process_pool.join()
 
 
 class FilterDataset(Dataset):
@@ -2607,6 +2646,8 @@ class ConcatDataset(Dataset):
         if sampler.get_num_samples() is not None:
             raise ValueError("The parameter num_samples of DistributedSampler is not support to be set!")
 
+        self.dataset_size = None
+
         self._sampler = _select_sampler(None, sampler, None, None, None)
         cumulative_samples_nums = 0
         for index, child in enumerate(self.children):
@@ -2631,7 +2672,7 @@ class ConcatDataset(Dataset):
 
                 tem_sampler = copy.deepcopy(sampler)
                 tem_sampler.set_offset(cumulative_samples_nums)
-                child.sampler = tem_sampler
+                child.use_sampler(tem_sampler)
 
             cumulative_samples_nums += self.children_sizes_[index]
             cumulative_samples_nums %= sampler.num_shards
@@ -2900,6 +2941,9 @@ def _select_sampler(num_samples, input_sampler, shuffle, num_shards, shard_id, n
         num_shards (int): Number of shard for sharding.
         shard_id (int): Shard ID.
         non_mappable (bool, optional): Indicate if caller is non-mappable dataset for special handling (default=False).
+
+    Returns:
+        Sampler, sampler selected based on user input.
     """
     if non_mappable is True and all(arg is None for arg in [num_samples, shuffle, num_shards, shard_id, input_sampler]):
         return None
@@ -3001,7 +3045,8 @@ class ImageFolderDataset(MappableDataset):
             unique index starting from 0).
         decode (bool, optional): Decode the images after reading (default=False).
         num_shards (int, optional): Number of shards that the dataset will be divided
-            into (default=None).
+            into (default=None). When this argument is specified, 'num_samples' reflects
+            the max sample number of per shard.
         shard_id (int, optional): The shard ID within num_shards (default=None). This
             argument can only be specified when num_shards is also specified.
         cache (DatasetCache, optional): Use tensor caching service to speed up dataset processing.
@@ -3150,7 +3195,8 @@ class MnistDataset(MappableDataset):
         sampler (Sampler, optional): Object used to choose samples from the
             dataset (default=None, expected order behavior shown in the table).
         num_shards (int, optional): Number of shards that the dataset will be divided
-            into (default=None).
+            into (default=None). When this argument is specified, 'num_samples' reflects
+            the max sample number of per shard.
         shard_id (int, optional): The shard ID within num_shards (default=None). This
             argument can only be specified when num_shards is also specified.
         cache (DatasetCache, optional): Use tensor caching service to speed up dataset processing.
@@ -3233,6 +3279,7 @@ class MindDataset(MappableDataset):
         shuffle (bool, optional): Whether or not to perform shuffle on the dataset
             (default=None, performs shuffle).
         num_shards (int, optional): Number of shards that the dataset will be divided into (default=None).
+            When this argument is specified, 'num_samples' reflects the max sample number of per shard.
         shard_id (int, optional): The shard ID within num_shards (default=None). This
             argument can only be specified when num_shards is also specified.
         sampler (Sampler, optional): Object used to choose samples from the
@@ -3274,7 +3321,7 @@ class MindDataset(MappableDataset):
             logger.warning("WARN: global shuffle is not used.")
 
         if sampler is not None:
-            if isinstance(sampler, (samplers.SubsetRandomSampler, samplers.PKSampler,
+            if isinstance(sampler, (samplers.SubsetRandomSampler, samplers.SubsetSampler, samplers.PKSampler,
                                     samplers.DistributedSampler, samplers.RandomSampler,
                                     samplers.SequentialSampler)) is False:
                 raise ValueError("The sampler is not supported yet.")
@@ -3384,23 +3431,31 @@ def _py_sampler_fn(sampler, num_samples, dataset):
             yield tuple([np.array(x, copy=False) for x in val])
 
 
-def _cpp_sampler_fn(sampler, dataset):
+def _cpp_sampler_fn(sample_ids, dataset):
     """
     Generator function wrapper for mappable dataset with cpp sampler.
     """
-    indices = sampler.get_indices()
-    for i in indices:
+    if not isinstance(sample_ids, np.ndarray):
+        raise RuntimeError("Sample IDs are not in a numpy array.")
+    if sample_ids.size == 0:
+        raise RuntimeError("Sampler passed an empty sample IDs list.")
+
+    for i in sample_ids:
         val = dataset[i]
         # convert output tensors to ndarrays
         yield tuple([np.array(x, copy=False) for x in val])
 
 
-def _cpp_sampler_fn_mp(sampler, sample_fn):
+def _cpp_sampler_fn_mp(sample_ids, sample_fn):
     """
     Multiprocessing generator function wrapper for mappable dataset with cpp sampler.
     """
-    indices = sampler.get_indices()
-    return sample_fn.process(indices)
+    if not isinstance(sample_ids, np.ndarray):
+        raise RuntimeError("Sample IDs are not in a numpy array.")
+    if sample_ids.size == 0:
+        raise RuntimeError("Sampler passed an empty sample IDs list.")
+
+    return sample_fn.process(sample_ids)
 
 
 def _py_sampler_fn_mp(sampler, num_samples, sample_fn):
@@ -3698,7 +3753,8 @@ class GeneratorDataset(MappableDataset):
         sampler (Union[Sampler, Iterable], optional): Object used to choose samples from the dataset. Random accessible
             input is required (default=None, expected order behavior shown in the table).
         num_shards (int, optional): Number of shards that the dataset will be divided into (default=None).
-            When this argument is specified, 'num_samples' will not used. Random accessible input is required.
+            Random accessible input is required. When this argument is specified, 'num_samples' reflects the max sample
+            number of per shard.
         shard_id (int, optional): The shard ID within num_shards (default=None). This argument must be specified only
             when num_shards is also specified. Random accessible input is required.
         python_multiprocessing (bool, optional): Parallelize Python operations with multiple worker process. This
@@ -3766,6 +3822,11 @@ class GeneratorDataset(MappableDataset):
             self.schema = schema
             if not isinstance(schema, Schema):
                 self.schema = Schema(schema)
+        # Move get dataset_size by len from parse to here, because self.source will
+        # lose attribution of '__len__' after deepcopy.
+        self.source_len = -1  # unknown
+        if hasattr(self.source, "__len__"):
+            self.source_len = len(self.source)
 
     def __deepcopy__(self, memodict):
         if id(self) in memodict:
@@ -3782,30 +3843,35 @@ class GeneratorDataset(MappableDataset):
         new_op.num_samples = copy.deepcopy(self.num_samples, memodict)
         new_op.sampler = copy.deepcopy(self.sampler)
         new_op.dataset_size = self.dataset_size
+        new_op.source_len = self.source_len
         new_op.saved_output_types = self.saved_output_types
         new_op.saved_output_shapes = self.saved_output_shapes
         if hasattr(self, "__total_batch__"):
             new_op.__total_batch__ = self.__total_batch__
         if new_op.sampler is not None and hasattr(self.source, "__getitem__"):
-            if isinstance(new_op.sampler, (samplers.SequentialSampler, samplers.DistributedSampler,
-                                           samplers.RandomSampler, samplers.SubsetRandomSampler,
-                                           samplers.WeightedRandomSampler, samplers.Sampler)):
-                sampler_instance = new_op.sampler.create()
-                sampler_instance.set_num_rows(len(self.source))
-                sampler_instance.initialize()
+            if isinstance(new_op.sampler, samplers.BuiltinSampler):
                 if new_op.num_parallel_workers > 1:
                     sample_fn = SamplerFn(self.source, new_op.num_parallel_workers, self.python_multiprocessing)
-                    new_op.source = (lambda: _cpp_sampler_fn_mp(sampler_instance, sample_fn))
+                    new_op.source = (lambda sample_ids: _cpp_sampler_fn_mp(sample_ids, sample_fn))
                 else:
-                    new_op.source = (lambda: _cpp_sampler_fn(sampler_instance, self.source))
+                    new_op.source = (lambda sample_ids: _cpp_sampler_fn(sample_ids, self.source))
             else:
+                # the sampler provided is not a built-in sampler, it is a list of sample_ids
+                new_op.sample_ids = new_op.sampler
+                # since list of sample_ids are not passed to c++, we need to find the proper len here
+                new_op.source_len = min(self.source_len, len(new_op.sample_ids)) if self.source_len != -1 else len(
+                    new_op.sample_ids)
+                new_op.source_len = min(self.source_len,
+                                        new_op.num_samples) if new_op.num_samples is not None else new_op.source_len
+                new_op.sampler = None
                 if new_op.num_parallel_workers > 1:
                     sample_fn = SamplerFn(self.source, new_op.num_parallel_workers, self.python_multiprocessing)
-                    new_op.source = (lambda: _py_sampler_fn_mp(new_op.sampler, new_op.num_samples, sample_fn))
+                    new_op.source = (lambda: _py_sampler_fn_mp(new_op.sample_ids, new_op.num_samples, sample_fn))
                 else:
-                    new_op.source = (lambda: _py_sampler_fn(new_op.sampler, new_op.num_samples, self.source))
+                    new_op.source = (lambda: _py_sampler_fn(new_op.sample_ids, new_op.num_samples, self.source))
         else:
             try:
+                new_op.sampler = None
                 iter(self.source)
             except TypeError:
                 # Use generator function if input callable
@@ -3824,24 +3890,13 @@ class GeneratorDataset(MappableDataset):
         return self.sampler.is_sharded()
 
     def parse(self, children=None):
-        dataset_size = -1
-        if hasattr(self.source, "__len__"):
-            if not self.num_shards:
-                dataset_size = len(self.source)
-            else:
-                dataset_size = math.ceil(len(self.source) / self.num_shards)
-
-            rows_from_sampler = self._get_sampler_dataset_size()
-            if rows_from_sampler is not None and rows_from_sampler < dataset_size:
-                dataset_size = rows_from_sampler
         if self.schema is None:
-            return cde.GeneratorNode(self.source, self.column_names, self.column_types).SetGeneratorDatasetSize(
-                dataset_size) \
-                .SetNumWorkers(self.num_parallel_workers)
+            return cde.GeneratorNode(self.source, self.column_names, self.column_types,
+                                     self.source_len, self.sampler).SetNumWorkers(self.num_parallel_workers)
         schema = self.schema
         if isinstance(schema, Schema):
             schema = self.schema.cpp_schema
-        return cde.GeneratorNode(self.source, schema).SetGeneratorDatasetSize(dataset_size).SetNumWorkers(
+        return cde.GeneratorNode(self.source, schema, self.source_len, self.sampler).SetNumWorkers(
             self.num_parallel_workers)
 
 
@@ -3872,7 +3927,8 @@ class TFRecordDataset(SourceDataset):
             - Shuffle.FILES: Shuffle files only.
 
         num_shards (int, optional): Number of shards that the dataset will be divided
-            into (default=None).
+            into (default=None). When this argument is specified, 'num_samples' reflects
+            the max sample number of per shard.
         shard_id (int, optional): The shard ID within num_shards (default=None). This
             argument can only be specified when num_shards is also specified.
         shard_equal_rows (bool, optional): Get equal rows for all shards(default=False). If shard_equal_rows
@@ -4065,7 +4121,8 @@ class ManifestDataset(MappableDataset):
             class will be given a unique index starting from 0).
         decode (bool, optional): decode the images after reading (default=False).
         num_shards (int, optional): Number of shards that the dataset will be divided
-            into (default=None).
+            into (default=None). When this argument is specified, 'num_samples' reflects
+            the max sample number of per shard.
         shard_id (int, optional): The shard ID within num_shards (default=None). This
             argument can only be specified when num_shards is also specified.
         cache (DatasetCache, optional): Use tensor caching service to speed up dataset processing.
@@ -4142,7 +4199,7 @@ class ManifestDataset(MappableDataset):
         Get the class index.
 
         Returns:
-            Dict, A str-to-int mapping from label name to index.
+            dict, a str-to-int mapping from label name to index.
         """
         if self.class_indexing is None:
             if self._class_indexing is None:
@@ -4229,7 +4286,8 @@ class Cifar10Dataset(MappableDataset):
         sampler (Sampler, optional): Object used to choose samples from the
             dataset (default=None, expected order behavior shown in the table).
         num_shards (int, optional): Number of shards that the dataset will be divided
-            into (default=None).
+            into (default=None). When this argument is specified, 'num_samples' reflects
+            the max sample number of per shard.
         shard_id (int, optional): The shard ID within num_shards (default=None). This
             argument can only be specified when num_shards is also specified.
         cache (DatasetCache, optional): Use tensor caching service to speed up dataset processing.
@@ -4370,7 +4428,8 @@ class Cifar100Dataset(MappableDataset):
         sampler (Sampler, optional): Object used to choose samples from the
             dataset (default=None, expected order behavior shown in the table).
         num_shards (int, optional): Number of shards that the dataset will be divided
-            into (default=None).
+            into (default=None). When this argument is specified, 'num_samples' reflects
+            the max sample number of per shard.
         shard_id (int, optional): The shard ID within num_shards (default=None). This
             argument can only be specified when num_shards is also specified.
         cache (DatasetCache, optional): Use tensor caching service to speed up dataset processing.
@@ -4460,7 +4519,8 @@ class RandomDataset(SourceDataset):
         shuffle (bool, optional): Whether or not to perform shuffle on the dataset
             (default=None, expected order behavior shown in the table).
         num_shards (int, optional): Number of shards that the dataset will be divided
-            into (default=None).
+            into (default=None). When this argument is specified, 'num_samples' reflects
+            the max sample number of per shard.
         shard_id (int, optional): The shard ID within num_shards (default=None). This
             argument can only be specified when num_shards is also specified.
     """
@@ -4541,7 +4601,7 @@ class Schema:
     Args:
         schema_file(str): Path of schema file (default=None).
 
-    Return:
+    Returns:
         Schema object, schema info about dataset.
 
     Raises:
@@ -4616,7 +4676,7 @@ class Schema:
         Get a JSON string of the schema.
 
         Returns:
-            Str, JSON string of the schema.
+            str, JSON string of the schema.
         """
         return self.cpp_schema.to_json()
 
@@ -4716,7 +4776,8 @@ class VOCDataset(MappableDataset):
         sampler (Sampler, optional): Object used to choose samples from the dataset
             (default=None, expected order behavior shown in the table).
         num_shards (int, optional): Number of shards that the dataset will be divided
-            into (default=None).
+            into (default=None). When this argument is specified, 'num_samples' reflects
+            the max sample number of per shard.
         shard_id (int, optional): The shard ID within num_shards (default=None). This
             argument can only be specified when num_shards is also specified.
         cache (DatasetCache, optional): Use tensor caching service to speed up dataset processing.
@@ -4802,7 +4863,7 @@ class VOCDataset(MappableDataset):
         Get the class index.
 
         Returns:
-            Dict, A str-to-int mapping from label name to index.
+            dict, a str-to-int mapping from label name to index.
         """
         if self.task != "Detection":
             raise NotImplementedError("Only 'Detection' support get_class_indexing.")
@@ -4912,7 +4973,8 @@ class CocoDataset(MappableDataset):
         sampler (Sampler, optional): Object used to choose samples from the dataset
             (default=None, expected order behavior shown in the table).
         num_shards (int, optional): Number of shards that the dataset will be divided
-            into (default=None).
+            into (default=None). When this argument is specified, 'num_samples' reflects
+            the max sample number of per shard.
         shard_id (int, optional): The shard ID within num_shards (default=None). This
             argument can only be specified when num_shards is also specified.
         cache (DatasetCache, optional): Use tensor caching service to speed up dataset processing.
@@ -4994,7 +5056,7 @@ class CocoDataset(MappableDataset):
         Get the class index.
 
         Returns:
-            Dict, A str-to-list<int> mapping from label name to index
+            dict, a str-to-list<int> mapping from label name to index
         """
         if self.task not in {"Detection", "Panoptic"}:
             raise NotImplementedError("Only 'Detection' and 'Panoptic' support get_class_indexing.")
@@ -5065,7 +5127,8 @@ class CelebADataset(MappableDataset):
         num_samples (int, optional): The number of images to be included in the dataset.
             (default=None, all images).
         num_shards (int, optional): Number of shards that the dataset will be divided
-            into (default=None).
+            into (default=None). When this argument is specified, 'num_samples' reflects
+            the max sample number of per shard.
         shard_id (int, optional): The shard ID within num_shards (default=None). This
             argument can only be specified when num_shards is also specified.
         cache (DatasetCache, optional): Use tensor caching service to speed up dataset processing.
@@ -5179,6 +5242,7 @@ class CLUEDataset(SourceDataset):
             - Shuffle.FILES: Shuffle files only.
 
         num_shards (int, optional): Number of shards that the dataset will be divided into (default=None).
+            When this argument is specified, 'num_samples' reflects the max sample number of per shard.
         shard_id (int, optional): The shard ID within num_shards (default=None). This
             argument can only be specified when num_shards is also specified.
         cache (DatasetCache, optional): Use tensor caching service to speed up dataset processing.
@@ -5413,6 +5477,7 @@ class CSVDataset(SourceDataset):
             - Shuffle.FILES: Shuffle files only.
 
         num_shards (int, optional): Number of shards that the dataset will be divided into (default=None).
+            When this argument is specified, 'num_samples' reflects the max sample number of per shard.
         shard_id (int, optional): The shard ID within num_shards (default=None). This
             argument can only be specified when num_shards is also specified.
         cache (DatasetCache, optional): Use tensor caching service to speed up dataset processing.
@@ -5525,6 +5590,7 @@ class TextFileDataset(SourceDataset):
             - Shuffle.FILES: Shuffle files only.
 
         num_shards (int, optional): Number of shards that the dataset will be divided into (default=None).
+            When this argument is specified, 'num_samples' reflects the max sample number of per shard.
         shard_id (int, optional): The shard ID within num_shards (default=None). This
             argument can only be specified when num_shards is also specified.
         cache (DatasetCache, optional): Use tensor caching service to speed up dataset processing.
@@ -5729,7 +5795,8 @@ class NumpySlicesDataset(GeneratorDataset):
         sampler (Union[Sampler, Iterable], optional): Object used to choose samples from the dataset. Random accessible
             input is required (default=None, expected order behavior shown in the table).
         num_shards (int, optional): Number of shards that the dataset will be divided into (default=None).
-            When this argument is specified, 'num_samples' will not used. Random accessible input is required.
+            Random accessible input is required. When this argument is specified, 'num_samples' reflects the max
+            sample number of per shard.
         shard_id (int, optional): The shard ID within num_shards (default=None). This argument must be specified only
             when num_shards is also specified. Random accessible input is required.
 

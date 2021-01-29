@@ -568,7 +568,6 @@ class CutOutOperation : public TensorOperation {
  private:
   int32_t length_;
   int32_t num_patches_;
-  ImageBatchFormat image_batch_format_;
 };
 
 class DvppDecodeResizeCropOperation : public TensorOperation {
@@ -669,6 +668,8 @@ class PadOperation : public TensorOperation {
 
   std::string Name() const override { return kPadOperation; }
 
+  Status to_json(nlohmann::json *out_json) override;
+
  private:
   std::vector<int32_t> padding_;
   std::vector<uint8_t> fill_value_;
@@ -730,6 +731,8 @@ class RandomColorAdjustOperation : public TensorOperation {
 
   std::string Name() const override { return kRandomColorAdjustOperation; }
 
+  Status to_json(nlohmann::json *out_json) override;
+
  private:
   std::vector<float> brightness_;
   std::vector<float> contrast_;
@@ -751,6 +754,8 @@ class RandomCropOperation : public TensorOperation {
 
   std::string Name() const override { return kRandomCropOperation; }
 
+  Status to_json(nlohmann::json *out_json) override;
+
  private:
   std::vector<int32_t> size_;
   std::vector<int32_t> padding_;
@@ -759,25 +764,44 @@ class RandomCropOperation : public TensorOperation {
   BorderType padding_mode_;
 };
 
-class RandomCropDecodeResizeOperation : public TensorOperation {
+class RandomResizedCropOperation : public TensorOperation {
  public:
-  RandomCropDecodeResizeOperation(std::vector<int32_t> size, std::vector<float> scale, std::vector<float> ratio,
-                                  InterpolationMode interpolation, int32_t max_attempts);
+  RandomResizedCropOperation(std::vector<int32_t> size, std::vector<float> scale = {0.08, 1.0},
+                             std::vector<float> ratio = {3. / 4., 4. / 3.},
+                             InterpolationMode interpolation = InterpolationMode::kNearestNeighbour,
+                             int32_t max_attempts = 10);
 
-  ~RandomCropDecodeResizeOperation() = default;
+  /// \brief default copy constructor
+  explicit RandomResizedCropOperation(const RandomResizedCropOperation &) = default;
+
+  ~RandomResizedCropOperation() = default;
 
   std::shared_ptr<TensorOp> Build() override;
 
   Status ValidateParams() override;
 
-  std::string Name() const override { return kRandomCropDecodeResizeOperation; }
+  std::string Name() const override { return kRandomResizedCropOperation; }
 
- private:
+ protected:
   std::vector<int32_t> size_;
   std::vector<float> scale_;
   std::vector<float> ratio_;
   InterpolationMode interpolation_;
   int32_t max_attempts_;
+};
+
+class RandomCropDecodeResizeOperation : public RandomResizedCropOperation {
+ public:
+  RandomCropDecodeResizeOperation(std::vector<int32_t> size, std::vector<float> scale, std::vector<float> ratio,
+                                  InterpolationMode interpolation, int32_t max_attempts);
+
+  explicit RandomCropDecodeResizeOperation(const RandomResizedCropOperation &base);
+
+  ~RandomCropDecodeResizeOperation() = default;
+
+  std::shared_ptr<TensorOp> Build() override;
+
+  std::string Name() const override { return kRandomCropDecodeResizeOperation; }
 };
 
 class RandomCropWithBBoxOperation : public TensorOperation {
@@ -882,29 +906,6 @@ class RandomResizeWithBBoxOperation : public TensorOperation {
   std::vector<int32_t> size_;
 };
 
-class RandomResizedCropOperation : public TensorOperation {
- public:
-  explicit RandomResizedCropOperation(std::vector<int32_t> size, std::vector<float> scale = {0.08, 1.0},
-                                      std::vector<float> ratio = {3. / 4., 4. / 3.},
-                                      InterpolationMode interpolation = InterpolationMode::kNearestNeighbour,
-                                      int32_t max_attempts = 10);
-
-  ~RandomResizedCropOperation() = default;
-
-  std::shared_ptr<TensorOp> Build() override;
-
-  Status ValidateParams() override;
-
-  std::string Name() const override { return kRandomResizedCropOperation; }
-
- private:
-  std::vector<int32_t> size_;
-  std::vector<float> scale_;
-  std::vector<float> ratio_;
-  InterpolationMode interpolation_;
-  int32_t max_attempts_;
-};
-
 class RandomResizedCropWithBBoxOperation : public TensorOperation {
  public:
   explicit RandomResizedCropWithBBoxOperation(std::vector<int32_t> size, std::vector<float> scale = {0.08, 1.0},
@@ -940,6 +941,8 @@ class RandomRotationOperation : public TensorOperation {
   Status ValidateParams() override;
 
   std::string Name() const override { return kRandomRotationOperation; }
+
+  Status to_json(nlohmann::json *out_json) override;
 
  private:
   std::vector<float> degrees_;
@@ -1041,6 +1044,8 @@ class RescaleOperation : public TensorOperation {
   Status ValidateParams() override;
 
   std::string Name() const override { return kRescaleOperation; }
+
+  Status to_json(nlohmann::json *out_json) override;
 
  private:
   float rescale_;

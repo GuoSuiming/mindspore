@@ -21,6 +21,9 @@
 
 namespace mindspore::lite {
 bool CheckFusion(kernel::LiteKernel *kernel) {
+  if (kernel->in_kernels().empty() || kernel->out_kernels().empty()) {
+    return false;
+  }
   auto pre_flag =
     std::all_of(kernel->in_kernels().begin(), kernel->in_kernels().end(), [](const kernel::LiteKernel *in_kernel) {
       return NPUPassUtils::IsNchw2Nhwc(in_kernel) && in_kernel->out_kernels().size() == 1;
@@ -223,7 +226,16 @@ int NPUFusionPass::FormatFusion(kernel::LiteKernel *kernel) {
     }
     RemoveAndFreeKernel(trans_kernel);
   }
-  pre_kernel->set_out_kernels(pre_insert_kernels);
+  auto pre_out_kernels = pre_kernel->out_kernels();
+  size_t index = 0;
+  for (; index < pre_out_kernels.size(); index++) {
+    if (pre_out_kernels[index] == kernel) {
+      pre_out_kernels.erase(pre_out_kernels.begin() + index);
+      break;
+    }
+  }
+  pre_out_kernels.insert(pre_out_kernels.begin() + index, pre_insert_kernels.begin(), pre_insert_kernels.end());
+  pre_kernel->set_out_kernels(pre_out_kernels);
   RemoveAndFreeKernel(kernel);
   return RET_OK;
 }

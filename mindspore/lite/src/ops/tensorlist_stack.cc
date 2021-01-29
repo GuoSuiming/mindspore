@@ -165,13 +165,14 @@ int TensorListStack::InferShape(std::vector<lite::Tensor *> inputs_, std::vector
   output->set_data_type(input0->tensors_data_type());
   output_shape_.insert(output_shape_.begin(), input0->ElementsNum());
   output->set_shape(output_shape_);
+  output->set_format(input0->format());
   return RET_OK;
 }
 
 int TensorListStack::MergeShape(const std::vector<int> &shape) {
   size_t dim0 = shape.size();
   size_t dim1 = output_shape_.size();
-  if (dim1 >= unKnownRank_) {
+  if (dim1 >= unKnownRank_ || output_shape_[0] == -1) {
     output_shape_ = shape;
     return RET_OK;
   }

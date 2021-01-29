@@ -159,6 +159,8 @@ Status ZipOp::fillBuffer(TensorQTable *const table) {
       return Status::OK();
     }
     // else we got a row so pack it into the tensor table.
+    // Currently we don't support printing error info after zip
+    new_row.setPath({});
     table->push_back(std::move(new_row));
   }
   return Status::OK();
@@ -237,13 +239,13 @@ Status ZipOp::EoeReceived(int32_t) {
 }
 
 // Visitor pre-accept method for NodePass
-Status ZipOp::PreAccept(NodePass *p, bool *modified) {
+Status ZipOp::PreAccept(NodePass *p, bool *const modified) {
   // Downcast shared pointer then call visitor
   return p->PreRunOnNode(shared_from_base<ZipOp>(), modified);
 }
 
 // Visitor accept method for NodePass
-Status ZipOp::Accept(NodePass *p, bool *modified) {
+Status ZipOp::Accept(NodePass *p, bool *const modified) {
   // Downcast shared pointer then call visitor
   return p->RunOnNode(shared_from_base<ZipOp>(), modified);
 }

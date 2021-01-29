@@ -67,7 +67,7 @@ Status TransferNode::ValidateParams() {
 }
 
 // Function to build TransferNode
-Status TransferNode::Build(std::vector<std::shared_ptr<DatasetOp>> *node_ops) {
+Status TransferNode::Build(std::vector<std::shared_ptr<DatasetOp>> *const node_ops) {
   if (queue_name_.empty()) {
     // Get a uuid for queue name
     queue_name_ = Services::GetUniqueID();
@@ -106,15 +106,24 @@ Status TransferNode::Build(std::vector<std::shared_ptr<DatasetOp>> *node_ops) {
 }
 
 // Visitor accepting method for IRNodePass
-Status TransferNode::Accept(IRNodePass *p, bool *modified) {
+Status TransferNode::Accept(IRNodePass *const p, bool *const modified) {
   // Downcast shared pointer then call visitor
   return p->Visit(shared_from_base<TransferNode>(), modified);
 }
 
 // Visitor accepting method for IRNodePass
-Status TransferNode::AcceptAfter(IRNodePass *p, bool *modified) {
+Status TransferNode::AcceptAfter(IRNodePass *const p, bool *const modified) {
   // Downcast shared pointer then call visitor
   return p->VisitAfter(shared_from_base<TransferNode>(), modified);
+}
+
+Status TransferNode::to_json(nlohmann::json *out_json) {
+  nlohmann::json args;
+  args["send_epoch_end"] = send_epoch_end_;
+  args["total_batch"] = total_batch_;
+  args["create_data_info_queue"] = create_data_info_queue_;
+  *out_json = args;
+  return Status::OK();
 }
 }  // namespace dataset
 }  // namespace mindspore

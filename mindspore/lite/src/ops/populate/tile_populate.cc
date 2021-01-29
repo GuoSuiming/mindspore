@@ -17,7 +17,7 @@
 #include "src/ops/tile.h"
 #include "src/ops/primitive_c.h"
 #include "src/ops/populate/populate_register.h"
-#include "nnacl/fp32/tile_fp32.h"
+#include "nnacl/base/tile_base.h"
 
 namespace mindspore {
 namespace lite {
@@ -40,7 +40,7 @@ OpParameter *PopulateTileParameter(const mindspore::lite::PrimitiveC *primitive)
 #else
   auto dims = param->GetDims();
   auto multiples = param->GetMultiples();
-  for (size_t i = 0; i < kDimension_4d; ++i) {
+  for (size_t i = 0; i < kQuadrupleNum; ++i) {
     tile_param->multiples_[i] = 1;
   }
   if (!dims.empty() && !multiples.empty()) {

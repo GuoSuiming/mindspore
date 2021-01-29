@@ -50,7 +50,7 @@ class TransferNode : public DatasetNode {
   /// \brief a base class override function to create the required runtime dataset op objects for this class
   /// \param node_ops - A vector containing shared pointer to the Dataset Ops that this object will create
   /// \return Status Status::OK() if build successfully
-  Status Build(std::vector<std::shared_ptr<DatasetOp>> *node_ops) override;
+  Status Build(std::vector<std::shared_ptr<DatasetOp>> *const node_ops) override;
 
   /// \brief Parameters validation
   /// \return Status Status::OK() if all the parameters are valid
@@ -62,13 +62,27 @@ class TransferNode : public DatasetNode {
   /// \param[in] p The node to visit
   /// \param[out] modified Indicator if the node was modified
   /// \return Status of the node visit
-  Status Accept(IRNodePass *p, bool *modified) override;
+  Status Accept(IRNodePass *const p, bool *const modified) override;
 
   /// \brief Base-class override for accepting IRNodePass visitor
   /// \param[in] p The node to visit
   /// \param[out] modified Indicator if the node was modified
   /// \return Status of the node visit
-  Status AcceptAfter(IRNodePass *p, bool *modified) override;
+  Status AcceptAfter(IRNodePass *const p, bool *const modified) override;
+
+  /// \brief Getter functions
+  const std::string &QueueName() const { return queue_name_; }
+  int32_t DeviceId() const { return device_id_; }
+  const std::string &DeviceType() const { return device_type_; }
+  int32_t PrefetchSize() const { return prefetch_size_; }
+  bool SendEpochEnd() const { return send_epoch_end_; }
+  int32_t TotalBatch() const { return total_batch_; }
+  bool CreateDataInfoQueue() const { return create_data_info_queue_; }
+
+  /// \brief Get the arguments of node
+  /// \param[out] out_json JSON string of all attributes
+  /// \return Status of the function
+  Status to_json(nlohmann::json *out_json) override;
 
  private:
   std::string queue_name_;

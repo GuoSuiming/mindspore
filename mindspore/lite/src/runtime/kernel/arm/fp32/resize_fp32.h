@@ -23,9 +23,6 @@
 #include "src/lite_kernel.h"
 #include "src/runtime/kernel/arm/base/resize_base.h"
 
-using mindspore::schema::PrimitiveType_Resize;
-using mindspore::schema::ResizeMethod;
-
 namespace mindspore::kernel {
 class ResizeCPUKernel : public ResizeBaseCPUKernel {
  public:
@@ -51,6 +48,7 @@ class ResizeCPUKernel : public ResizeBaseCPUKernel {
   float *y_bottom_weights_ = nullptr;
   float *x_left_weights_ = nullptr;
   float *line_buffer_ = nullptr;
+  CalculateOriginalCoordinate calculate_ = nullptr;
 };
 }  // namespace mindspore::kernel
 

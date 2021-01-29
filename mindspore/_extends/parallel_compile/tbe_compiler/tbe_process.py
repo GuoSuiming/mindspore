@@ -19,8 +19,10 @@ import subprocess
 import sys
 import os
 import json
+from mindspore import log as logger
 from .common import check_kernel_info, TBEException
 from .helper import _op_select_format, _check_supported
+
 
 def create_tbe_parallel_process():
     """
@@ -30,6 +32,7 @@ def create_tbe_parallel_process():
         TBEParallelCompiler
     """
     return tbe_process
+
 
 def op_select_format(op_json: str):
     """
@@ -75,6 +78,7 @@ def check_supported(op_json: str):
 
     return ret
 
+
 def run_compiler(op_json):
     """
     run compiler to compile op with subprocess
@@ -96,26 +100,13 @@ def run_compiler(op_json):
     except subprocess.CalledProcessError as e:
         return "TBEException", "ERROR:\n" + e.stdout + "\n" + e.stderr + "\ninput_args: " + op_json
 
+
 class TbeProcess:
     """tbe process"""
 
     def __init__(self):
         self.__processe_num = multiprocessing.cpu_count()
-        # max_processes_num: Set the maximum number of concurrent processes for compiler
-        self.max_processes_num = 24
-        process_num = os.getenv("MS_BUILD_PROCESS_NUM")
-        if process_num is None:
-            self.max_processes_num = 24
-        elif process_num.isdigit():
-            if int(process_num) in range(1, 25):
-                self.max_processes_num = int(process_num)
-            else:
-                raise EnvironmentError(
-                    f"Env ERROR, [MS_BUILD_PROCESS_NUM] should be in range(1, 25), but: {process_num}")
-        elif not process_num.isdigit():
-            raise EnvironmentError(f"Env ERROR, [MS_BUILD_PROCESS_NUM] should be a digit, but: {process_num}")
-        if self.__processe_num > self.max_processes_num:
-            self.__processe_num = self.max_processes_num
+        self.default_num = 24
         self.__pool = None
         self.__next_task_id = 1
         self.__running_tasks = []
@@ -125,6 +116,27 @@ class TbeProcess:
             self.__pool.terminate()
             self.__pool.join()
             del self.__pool
+
+    def init_process_num(self):
+        """
+        init compile process num
+        :return: str Success or other string info
+        """
+        # max_processes_num: Set the maximum number of concurrent processes for compiler
+        process_num = os.getenv("MS_BUILD_PROCESS_NUM")
+        res = "Success"
+        if process_num is None:
+            logger.info(f"Using default compile process num {self.default_num}")
+        elif process_num.isdigit():
+            if int(process_num) in range(1, 25):
+                self.default_num = int(process_num)
+                logger.info(f"Using custom compile process num {self.default_num}")
+            else:
+                res = "TBEException",\
+                      "ERROR: [MS_BUILD_PROCESS_NUM] should be in range(1, 25), but got : " + str(process_num)
+        elif not process_num.isdigit():
+            res = "TBEException", "ERROR: [MS_BUILD_PROCESS_NUM] type should be a int num, but got :" + process_num
+        return res
 
     def exit(self):
         if self.__pool is not None:
@@ -142,6 +154,8 @@ class TbeProcess:
         Returns:
             int, task id(>0). -1 if error
         """
+        if self.__processe_num > self.default_num:
+            self.__processe_num = self.default_num
         task_id = self.__next_task_id
         self.__next_task_id = self.__next_task_id + 1
         if self.__pool is None:
@@ -176,5 +190,6 @@ class TbeProcess:
         """
         if self.__running_tasks:
             self.__running_tasks.clear()
+
 
 tbe_process = TbeProcess()

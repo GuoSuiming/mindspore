@@ -29,11 +29,7 @@
 namespace mindspore {
 namespace dataset {
 CsvOp::Builder::Builder()
-    : builder_device_id_(0),
-      builder_num_devices_(1),
-      builder_num_samples_(0),
-      builder_shuffle_files_(false),
-      builder_sampler_(nullptr) {
+    : builder_device_id_(0), builder_num_devices_(1), builder_num_samples_(0), builder_shuffle_files_(false) {
   std::shared_ptr<ConfigManager> config_manager = GlobalContext::config_manager();
   builder_num_workers_ = config_manager->num_parallel_workers();
   builder_op_connector_size_ = config_manager->op_connector_size();
@@ -65,8 +61,7 @@ Status CsvOp::Builder::Build(std::shared_ptr<CsvOp> *op) {
   std::shared_ptr<CsvOp> csv_op = std::make_shared<CsvOp>(
     builder_csv_files_list_, builder_field_delim_, builder_column_default_list_, builder_column_name_list_,
     builder_num_workers_, builder_rows_per_buffer_, builder_num_samples_, builder_worker_connector_size_,
-    builder_op_connector_size_, builder_shuffle_files_, builder_num_devices_, builder_device_id_,
-    std::move(builder_sampler_));
+    builder_op_connector_size_, builder_shuffle_files_, builder_num_devices_, builder_device_id_);
   RETURN_IF_NOT_OK(csv_op->Init());
   *op = std::move(csv_op);
 
@@ -77,8 +72,8 @@ CsvOp::CsvOp(const std::vector<std::string> &csv_files_list, char field_delim,
              const std::vector<std::shared_ptr<BaseRecord>> &column_default,
              const std::vector<std::string> &column_name, int32_t num_workers, int64_t rows_per_buffer,
              int64_t num_samples, int32_t worker_connector_size, int32_t op_connector_size, bool shuffle_files,
-             int32_t num_device, int32_t device_id, std::shared_ptr<SamplerRT> sampler)
-    : ParallelOp(num_workers, op_connector_size, std::move(sampler)),
+             int32_t num_device, int32_t device_id)
+    : ParallelOp(num_workers, op_connector_size),
       csv_files_list_(std::move(csv_files_list)),
       field_delim_(field_delim),
       column_default_list_(column_default),
@@ -110,12 +105,14 @@ Status CsvOp::Init() {
 }
 
 CsvOp::CsvParser::CsvParser(int32_t worker_id, std::shared_ptr<JaggedConnector> connector, int64_t rows_per_buffer,
-                            char field_delim, std::vector<std::shared_ptr<CsvOp::BaseRecord>> column_default)
+                            char field_delim, std::vector<std::shared_ptr<CsvOp::BaseRecord>> column_default,
+                            std::string file_path)
     : worker_id_(worker_id),
       buffer_connector_(connector),
       csv_rows_per_buffer_(rows_per_buffer),
       csv_field_delim_(field_delim),
       column_default_(column_default),
+      file_path_(file_path),
       cur_state_(START_OF_FILE),
       pos_(0),
       cur_row_(0),
@@ -358,8 +355,11 @@ Status CsvOp::CsvParser::InitCsvParser() {
         {{State::START_OF_FILE, Message::MS_NORMAL},
          {State::UNQUOTE,
           [this](CsvParser &, char c) -> int {
+            TensorRow row(column_default_.size(), nullptr);
+            std::vector<std::string> file_path(column_default_.size(), file_path_);
+            row.setPath(file_path);
             this->tensor_table_ = std::make_unique<TensorQTable>();
-            this->tensor_table_->push_back(TensorRow(column_default_.size(), nullptr));
+            this->tensor_table_->push_back(row);
             this->str_buf_[0] = c;
             this->pos_ = 1;
             return 0;
@@ -367,15 +367,21 @@ Status CsvOp::CsvParser::InitCsvParser() {
         {{State::START_OF_FILE, Message::MS_DELIM},
          {State::DELIM,
           [this](CsvParser &, char c) -> int {
+            TensorRow row(column_default_.size(), nullptr);
+            std::vector<std::string> file_path(column_default_.size(), file_path_);
+            row.setPath(file_path);
             this->tensor_table_ = std::make_unique<TensorQTable>();
-            this->tensor_table_->push_back(TensorRow(column_default_.size(), nullptr));
+            this->tensor_table_->push_back(row);
             return this->PutRecord(c);
           }}},
         {{State::START_OF_FILE, Message::MS_QUOTE},
          {State::QUOTE,
           [this](CsvParser &, char c) -> int {
+            TensorRow row(column_default_.size(), nullptr);
+            std::vector<std::string> file_path(column_default_.size(), file_path_);
+            row.setPath(file_path);
             this->tensor_table_ = std::make_unique<TensorQTable>();
-            this->tensor_table_->push_back(TensorRow(column_default_.size(), nullptr));
+            this->tensor_table_->push_back(row);
             this->pos_ = 0;
             return 0;
           }}},
@@ -458,7 +464,10 @@ Status CsvOp::CsvParser::InitCsvParser() {
          {State::UNQUOTE,
           [this](CsvParser &, char c) -> int {
             if (this->total_rows_ > this->start_offset_ && this->total_rows_ <= this->end_offset_) {
-              this->tensor_table_->push_back(TensorRow(column_default_.size(), nullptr));
+              TensorRow row(column_default_.size(), nullptr);
+              std::vector<std::string> file_path(column_default_.size(), file_path_);
+              row.setPath(file_path);
+              this->tensor_table_->push_back(row);
             }
             this->str_buf_[0] = c;
             this->pos_ = 1;
@@ -468,7 +477,10 @@ Status CsvOp::CsvParser::InitCsvParser() {
          {State::DELIM,
           [this](CsvParser &, char c) -> int {
             if (this->total_rows_ > this->start_offset_ && this->total_rows_ <= this->end_offset_) {
-              this->tensor_table_->push_back(TensorRow(column_default_.size(), nullptr));
+              TensorRow row(column_default_.size(), nullptr);
+              std::vector<std::string> file_path(column_default_.size(), file_path_);
+              row.setPath(file_path);
+              this->tensor_table_->push_back(row);
             }
             return this->PutRecord(c);
           }}},
@@ -476,7 +488,10 @@ Status CsvOp::CsvParser::InitCsvParser() {
          {State::QUOTE,
           [this](CsvParser &, char c) -> int {
             if (this->total_rows_ > this->start_offset_ && this->total_rows_ <= this->end_offset_) {
-              this->tensor_table_->push_back(TensorRow(column_default_.size(), nullptr));
+              TensorRow row(column_default_.size(), nullptr);
+              std::vector<std::string> file_path(column_default_.size(), file_path_);
+              row.setPath(file_path);
+              this->tensor_table_->push_back(row);
             }
             return 0;
           }}},
@@ -497,7 +512,7 @@ Status CsvOp::Reset() {
 
 Status CsvOp::LoadFile(const std::string &file, const int64_t start_offset, const int64_t end_offset,
                        const int32_t worker_id) {
-  CsvParser csv_parser(worker_id, jagged_buffer_connector_, rows_per_buffer_, field_delim_, column_default_list_);
+  CsvParser csv_parser(worker_id, jagged_buffer_connector_, rows_per_buffer_, field_delim_, column_default_list_, file);
   csv_parser.SetStartOffset(start_offset);
   csv_parser.SetEndOffset(end_offset);
   std::ifstream ifs;
@@ -512,7 +527,7 @@ Status CsvOp::LoadFile(const std::string &file, const int64_t start_offset, cons
   csv_parser.Reset();
   try {
     while (ifs.good()) {
-      // when ifstream reachs the end of file, the function get() return std::char_traits<char>::eof()
+      // when ifstream reaches the end of file, the function get() return std::char_traits<char>::eof()
       // which is a 32-bit -1, it's not equal to the 8-bit -1 on Euler OS. So instead of char, we use
       // int to receive its return value.
       int chr = ifs.get();
@@ -799,7 +814,7 @@ Status CsvOp::CalculateNumRowsPerShard() {
 }
 
 int64_t CsvOp::CountTotalRows(const std::string &file) {
-  CsvParser csv_parser(0, jagged_buffer_connector_, rows_per_buffer_, field_delim_, column_default_list_);
+  CsvParser csv_parser(0, jagged_buffer_connector_, rows_per_buffer_, field_delim_, column_default_list_, file);
   std::ifstream ifs;
   ifs.open(file, std::ifstream::in);
   if (!ifs.is_open()) {
@@ -900,18 +915,8 @@ Status CsvOp::ComputeColMap() {
   return Status::OK();
 }
 
-// Brief If a cache has been added into the ascendant tree over this csv op, then the cache will be executing
-// a sampler for fetching the data.  As such, any options in the csv op need to be reset to its defaults so
-// that this csv op will produce the full set of data into the cache.
-void CsvOp::MakeSimpleProducer() {
-  device_id_ = 0;
-  num_devices_ = 1;
-  shuffle_files_ = false;
-  num_samples_ = 0;
-}
-
 // Visitor accept method for NodePass
-Status CsvOp::Accept(NodePass *p, bool *modified) {
+Status CsvOp::Accept(NodePass *p, bool *const modified) {
   // Downcast shared pointer then call visitor
   return p->RunOnNode(shared_from_base<CsvOp>(), modified);
 }

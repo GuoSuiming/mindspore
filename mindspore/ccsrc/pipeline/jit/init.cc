@@ -80,6 +80,8 @@ PYBIND11_MODULE(_c_expression, m) {
          py::arg("params"), "Fetch the inputs of Conv or Matmul for quant export.")
     .def("get_parameter_layout", &ExecutorPy::GetParameterLayout, py::arg("phase") = py::str("train"),
          "Get Parameter Tensor Layout Dictionary.")
+    .def("get_parallel_parameter_name_list", &ExecutorPy::GetParallelParameterNameList,
+         py::arg("phase") = py::str("train"), "Get Parallel Parameter Name List.")
     .def("get_strategy", &ExecutorPy::GetCNodeStrategy, py::arg("phase") = py::str("train"),
          "Get CNode Strategy Dictionary.")
     .def("get_num_parallel_ops", &ExecutorPy::GetNumOpsInfo, py::arg("phase") = py::str("train"),
@@ -131,6 +133,8 @@ PYBIND11_MODULE(_c_expression, m) {
     .def("set_loss_repeated_mean", &ParallelContext::set_loss_repeated_mean, "Set loss repeated mean.")
     .def("get_parallel_mode", &ParallelContext::parallel_mode, "Get parallel mode.")
     .def("set_parallel_mode", &ParallelContext::set_parallel_mode, "Set parallel mode.")
+    .def("get_grad_accumulation_step", &ParallelContext::grad_accumulation_step, "Get grad accumulation step.")
+    .def("set_grad_accumulation_step", &ParallelContext::set_grad_accumulation_step, "Set grad accumulation step.")
     .def("get_strategy_search_mode", &ParallelContext::strategy_search_mode, "Get strategy search mode.")
     .def("set_strategy_search_mode", &ParallelContext::set_strategy_search_mode, "Set strategy search mode.")
     .def("set_all_reduce_fusion_split_indices", &ParallelContext::SetAllReduceFusionSplitIndices,
@@ -155,6 +159,7 @@ PYBIND11_MODULE(_c_expression, m) {
          "Set strategy checkpoint save file.")
     .def("get_strategy_ckpt_load_file", &ParallelContext::strategy_ckpt_load_file, "Get strategy checkpoint load file.")
     .def("get_strategy_ckpt_save_file", &ParallelContext::strategy_ckpt_save_file, "Get strategy checkpoint save file.")
+    .def("set_group_ckpt_save_file", &ParallelContext::set_group_ckpt_save_file, "Set group checkpoint save file.")
     .def("set_pipeline_stage_split_num", &ParallelContext::set_pipeline_stage_split_num,
          "Set pipeline stage split num.")
     .def("get_pipeline_stage_split_num", &ParallelContext::pipeline_stage_split_num, "Get pipeline stage split num.")

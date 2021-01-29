@@ -62,22 +62,16 @@ int ResizeBaseCPUKernel::CheckParameters() {
       MS_LOG(INFO) << "Out shape is not assigned";
       const_shape_ = false;
     } else {
-      new_height_ = reinterpret_cast<int32_t *>(out_shape)[0];
-      if (new_height_ < 1) {
-        MS_LOG(ERROR) << "Resize new_height should >= 1, but got " << new_height_;
-        return RET_INVALID_OP_ATTR;
-      }
-      new_width_ = reinterpret_cast<int32_t *>(out_shape)[1];
-      if (new_width_ < 1) {
-        MS_LOG(ERROR) << "Resize new_width should >= 1, but got " << new_width_;
-        return RET_INVALID_OP_ATTR;
+      if (InferShapeDone()) {
+        new_height_ = out_tensors_.at(0)->shape().at(1);
+        new_width_ = out_tensors_.at(0)->shape().at(2);
       }
       const_shape_ = true;
     }
   }
-  align_corners_ = parameter->align_corners_;
-  preserve_aspect_ratio = parameter->preserve_aspect_ratio_;
-  if (preserve_aspect_ratio) {
+  coordinate_transform_mode_ = parameter->coordinate_transform_mode_;
+  preserve_aspect_ratio_ = parameter->preserve_aspect_ratio_;
+  if (preserve_aspect_ratio_) {
     MS_LOG(ERROR) << "Resize currently not support preserve_aspect_ratio true";
     return RET_ERROR;
   }
@@ -85,7 +79,7 @@ int ResizeBaseCPUKernel::CheckParameters() {
 }
 
 int ResizeBaseCPUKernel::CheckInputsOuputs() {
-  if (in_tensors_.size() <= lite::kDoubleNum) {
+  if (in_tensors_.size() <= lite::kQuadrupleNum) {
     for (size_t i = 0; i < in_tensors_.size(); i++) {
       auto input = in_tensors_.at(i);
       if (input == nullptr) {

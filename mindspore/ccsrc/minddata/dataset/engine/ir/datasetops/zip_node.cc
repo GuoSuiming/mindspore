@@ -28,6 +28,7 @@ namespace mindspore {
 namespace dataset {
 
 ZipNode::ZipNode(const std::vector<std::shared_ptr<DatasetNode>> &datasets) {
+  nary_op_ = true;
   for (auto const &child : datasets) AddChild(child);
 }
 
@@ -56,7 +57,7 @@ Status ZipNode::ValidateParams() {
   return Status::OK();
 }
 
-Status ZipNode::Build(std::vector<std::shared_ptr<DatasetOp>> *node_ops) {
+Status ZipNode::Build(std::vector<std::shared_ptr<DatasetOp>> *const node_ops) {
   node_ops->push_back(std::make_shared<ZipOp>(rows_per_buffer_, connector_que_size_));
   return Status::OK();
 }
@@ -81,13 +82,13 @@ Status ZipNode::GetDatasetSize(const std::shared_ptr<DatasetSizeGetter> &size_ge
 }
 
 // Visitor accepting method for IRNodePass
-Status ZipNode::Accept(IRNodePass *p, bool *modified) {
+Status ZipNode::Accept(IRNodePass *const p, bool *const modified) {
   // Downcast shared pointer then call visitor
   return p->Visit(shared_from_base<ZipNode>(), modified);
 }
 
 // Visitor accepting method for IRNodePass
-Status ZipNode::AcceptAfter(IRNodePass *p, bool *modified) {
+Status ZipNode::AcceptAfter(IRNodePass *const p, bool *const modified) {
   // Downcast shared pointer then call visitor
   return p->VisitAfter(shared_from_base<ZipNode>(), modified);
 }

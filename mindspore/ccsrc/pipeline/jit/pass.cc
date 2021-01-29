@@ -36,11 +36,14 @@
 #include "frontend/optimizer/graph_transform.h"
 #include "frontend/parallel/step_parallel.h"
 #include "frontend/parallel/step_auto_parallel.h"
+#include "frontend/parallel/cache_embedding/cache_embedding.h"
 #include "frontend/parallel/allreduce_fusion/step_allreduce_fusion.h"
 #include "frontend/optimizer/recompute.h"
 #include "utils/log_adapter.h"
 #include "pipeline/jit/pipeline_split.h"
-
+#if (ENABLE_CPU && (ENABLE_D || ENABLE_GPU))
+#include "ps/util.h"
+#endif
 namespace mindspore {
 namespace pipeline {
 using OptPassGroupMap = opt::OptPassGroupMap;
@@ -143,6 +146,7 @@ OptPassGroupMap GetOptPassesA(const opt::irpass::OptimizeIRPassLib &irpass) {
     irpass.check_bprop_eliminate_,
     irpass.switch_layer_defer_inline_,
     irpass.replace_applicator_,
+    irpass.mirror_mini_step_elim_,
   });
   opt::OptPassConfig virtual_dataset = opt::OptPassConfig({irpass.virtual_dataset_eliminate_});
   opt::OptPassConfig grad = opt::OptPassConfig({irpass.expand_jprim_}, true);
@@ -298,6 +302,11 @@ OptPassGroupMap GetPreparePhases(const opt::irpass::OptimizeIRPassLib &irpass) {
   return map;
 }
 
+OptPassGroupMap GetAfterRecomputePass(const opt::irpass::OptimizeIRPassLib &irpass) {
+  OptPassGroupMap map({{"cse", opt::OptPassConfig(opt::CSEPass(false))}});
+  return map;
+}
+
 static std::unordered_map<std::string, std::shared_ptr<Optimizer>> g_pass_opts = {};
 
 void InitOpt(const ResourcePtr &res) {
@@ -319,6 +328,8 @@ void InitOpt(const ResourcePtr &res) {
     g_pass_opts["opt_grad_epilogue"] =
       Optimizer::MakeOptimizer("opt_grad_epilogue", res, GetOptPynativeGradEpiloguePhases(irpass), true, false);
     g_pass_opts["opt_prepare"] = Optimizer::MakeOptimizer("opt_prepare", res, GetPreparePhases(irpass));
+    g_pass_opts["opt_after_recompute"] =
+      Optimizer::MakeOptimizer("opt_after_recompute", res, GetAfterRecomputePass(irpass));
     auto context_ptr = MsContext::GetInstance();
     MS_EXCEPTION_IF_NULL(context_ptr);
     if (!(context_ptr->get_param<bool>(MS_CTX_ENABLE_GRAPH_KERNEL))) {
@@ -363,6 +374,7 @@ bool OptPassGraphKernelGroupA(const ResourcePtr &res) { return OptPassGroup(res,
 bool OptPassGraphKernelGroupB(const ResourcePtr &res) { return OptPassGroup(res, "opt_graph_kernel_b"); }
 bool ControlGroup(const ResourcePtr &res) { return OptPassGroup(res, "opt_control"); }
 bool PrepareGroup(const ResourcePtr &res) { return OptPassGroup(res, "opt_prepare"); }
+bool OptAfterRecomputeGroup(const ResourcePtr &res) { return OptPassGroup(res, "opt_after_recompute"); }
 
 bool OptPassRNGroup(const ResourcePtr &res) { return OptPassGroup(res, "renormal"); }
 
@@ -387,6 +399,26 @@ bool AddControlDependPass(const ResourcePtr &res) {
 bool AddRecomputationPass(const ResourcePtr &res) {
   MS_EXCEPTION_IF_NULL(res);
   opt::InsertRecomputedNodes(res->func_graph());
+  return true;
+}
+
+bool AddCacheEmbeddingPass(const ResourcePtr &res) {
+#if (ENABLE_CPU && (ENABLE_D || ENABLE_GPU))
+  if (ps::Util::IsParamServerMode()) {
+    return true;
+  }
+#endif
+  FuncGraphPtr func_graph = res->func_graph();
+  MS_EXCEPTION_IF_NULL(func_graph);
+
+  parallel::AddCacheEmbedding(func_graph);
+  if (func_graph->has_flag(GRAPH_FLAG_CACHE_ENABLE)) {
+    auto params = func_graph->parameters();
+    AbstractBasePtrList args_spec_list;
+    std::for_each(params.begin(), params.end(),
+                  [&args_spec_list](const AnfNodePtr &node) { args_spec_list.push_back(node->abstract()); });
+    func_graph = pipeline::Renormalize(res, func_graph, args_spec_list);
+  }
   return true;
 }
 
@@ -445,10 +477,28 @@ bool TransformTopGraphPass(const ResourcePtr &res) {
 
 bool PipelineSplitPass(const ResourcePtr &res) { return PipelineSplit(res); }
 
+void UpdateFuncGraphParameter(const FuncGraphPtr &func_graph) {
+  MS_EXCEPTION_IF_NULL(func_graph);
+  std::vector<AnfNodePtr> new_paras;
+  for (const auto &param : func_graph->parameters()) {
+    auto param_node = param->cast<ParameterPtr>();
+    if (param_node->has_default()) {
+      new_paras.push_back(param_node);
+      continue;
+    }
+    AbstractBasePtr par_abs = param_node->abstract();
+    if (par_abs->isa<abstract::AbstractUndetermined>()) {
+      new_paras.push_back(param_node);
+    }
+  }
+  func_graph->set_parameters(new_paras);
+}
+
 bool ValidatePass(const ResourcePtr &res) {
   MS_EXCEPTION_IF_NULL(res->func_graph());
   FuncGraphPtr func_graph = res->func_graph();
   Validate(func_graph);
+  UpdateFuncGraphParameter(func_graph);
   return true;
 }
 
@@ -481,8 +531,10 @@ std::vector<PassItem> kVmPasses = {{"simplify_data_structures", SimplifyDataStru
                                    {"tuple_transform", OptPassTransformGraphGroup},
                                    {"opt_graph_kernel_a", OptPassGraphKernelGroupA},
                                    {"opt_graph_kernel_b", OptPassGraphKernelGroupB},
+                                   {"add_cache_embedding", AddCacheEmbeddingPass},
                                    {"add_control_depend", AddControlDependPass},
-                                   {"add_recomputation", AddRecomputationPass}};
+                                   {"add_recomputation", AddRecomputationPass},
+                                   {"cse_after_recomputation", OptAfterRecomputeGroup}};
 
 std::vector<PassItem> kGePasses = {{"simplify_data_structures", SimplifyDataStructuresPass},
                                    {"opt_a", OptPassAGroup},

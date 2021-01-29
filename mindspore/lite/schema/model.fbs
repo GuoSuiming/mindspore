@@ -41,7 +41,7 @@ table QuantParam {
     meanCorr: float = 0;
     dstDtype: int = 32;
     roundType: int = 1;
-    multiplier: int = -1; // calculate fixed point multiplier method
+    multiplier: int = 1; // calculate fixed point multiplier method
 }
 
 table Tensor {
@@ -57,6 +57,7 @@ table Tensor {
     quantParams: [QuantParam];
     quantClusters: [float];
     name: string;
+    enableHuffmanCode: bool = false;
 }
 
 union PrimitiveType {
@@ -267,6 +268,10 @@ union PrimitiveType {
     GeLU,
     Gru,
     NonZero,
+    InvertPermutation,
+    Size,
+    RandomStandardNormal,
+    CropAndResize,
 }
 
 enum QuantType: int {

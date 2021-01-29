@@ -15,9 +15,11 @@
  */
 #include "backend/session/gpu_session.h"
 
+#include <string>
 #include "backend/optimizer/common/helper.h"
 #include "backend/optimizer/common/optimizer.h"
 #include "backend/optimizer/common/pass_manager.h"
+#include "backend/optimizer/common/common_backend_optimization.h"
 #include "backend/optimizer/gpu/adam_weight_decay_fusion.h"
 #include "backend/optimizer/gpu/adam_fusion.h"
 #include "backend/optimizer/gpu/apply_momentum_weight_scale_fusion.h"
@@ -43,13 +45,16 @@
 #include "backend/optimizer/graph_kernel/arithmetic_simplify.h"
 #include "backend/optimizer/graph_kernel/basic_ops_fusion.h"
 #include "backend/optimizer/graph_kernel/clean_all_in_once.h"
+#include "backend/optimizer/graph_kernel/depend_formater.h"
 #include "backend/optimizer/graph_kernel/eliminate_redundant_output.h"
 #include "backend/optimizer/graph_kernel/tensor_promotion.h"
 #include "backend/optimizer/graph_kernel/graph_kernel_splitter.h"
 #include "backend/optimizer/graph_kernel/graph_kernel_expander.h"
+#include "backend/optimizer/graph_kernel/raise_reduction_precision.h"
 #include "backend/optimizer/graph_kernel/graph_kernel_cse.h"
 #include "backend/optimizer/graph_kernel/shape_ops_splitter.h"
 #include "backend/optimizer/graph_kernel/value_graph_binder.h"
+#include "backend/optimizer/graph_kernel/parallel_fusion.h"
 #include "backend/optimizer/pass/communication_op_fusion.h"
 #include "backend/optimizer/pass/getitem_tuple.h"
 #include "common/trans.h"
@@ -178,10 +183,12 @@ void GPUSession::GraphKernelOptimize(const std::shared_ptr<KernelGraph> &kernel_
   auto optimizer = std::make_shared<opt::GraphOptimizer>();
   auto pm = std::make_shared<opt::PassManager>("graph_kernel_pm");
   std::vector<PrimitivePtr> duplicated_ops = {prim::kPrimReshape, prim::kPrimExpandDims, prim::kPrimCast};
+  pm->AddPass(std::make_shared<opt::DependFormater>());  // Make more fusion opportunity.
   pm->AddPass(std::make_shared<opt::GraphKernelExpander>());
   pm->AddPass(std::make_shared<opt::ShapeOpsSplitter>(duplicated_ops));
   pm->AddPass(std::make_shared<opt::BasicOpsFusion>());
   pm->AddPass(std::make_shared<opt::EliminateRedundantOutput>());
+  pm->AddPass(std::make_shared<opt::RaiseReductionPrecision>());
   pm->AddPass(std::make_shared<opt::GraphKernelCSE>(duplicated_ops));
   pm->AddPass(std::make_shared<opt::ArithmeticSimplify>());
   pm->AddPass(std::make_shared<opt::GraphKernelCSE>(duplicated_ops));
@@ -194,7 +201,8 @@ void GPUSession::GraphKernelOptimize(const std::shared_ptr<KernelGraph> &kernel_
   // will be exposed, use GetitemTuple Pass to delete them.
   pm->AddPass(std::make_shared<opt::GetitemTuple>());
   pm->AddPass(std::make_shared<opt::AtomicCleanInsertter>());
-  pm->AddPass(std::make_shared<opt::CleanAllInOnce>());
+  pm->AddPass(std::make_shared<opt::DependFormater>());  // Prevent fake loop in parallel fusion.
+  pm->AddPass(std::make_shared<opt::ParallelOpFusion>(kGPUDevice, opt::ParallelConfig(7)));
   pm->AddPass(std::make_shared<opt::BindValueToGraph>());
   optimizer->AddPassManager(pm);
   (void)optimizer->Optimize(kernel_graph);
@@ -298,16 +306,31 @@ void GPUSession::Execute(const std::shared_ptr<KernelGraph> &kernel_graph) const
 
 GraphId GPUSession::CompileGraphImpl(const AnfNodePtrList &lst, const AnfNodePtrList &outputs) {
   // Construct graph, if successfully, graph_sum_ + 1
-  auto graph_id = graph_sum_;
   auto graph = ConstructKernelGraph(lst, outputs);
   MS_EXCEPTION_IF_NULL(graph);
+  return CompileGraphImpl(graph);
+}
+
+GraphId GPUSession::CompileGraphImpl(NotNull<FuncGraphPtr> func_graph) {
+  std::vector<KernelGraphPtr> all_graphs;
+  auto root_graph = ConstructKernelGraph(func_graph, &all_graphs);
+  MS_EXCEPTION_IF_NULL(root_graph);
+  if (all_graphs.size() != 1) {
+    MS_LOG(EXCEPTION) << "Gpu backend does not support multi-graph schedule. graph num" << all_graphs.size();
+  }
+
+  opt::BackendCommonOptimization(root_graph);
+  return CompileGraphImpl(root_graph);
+}
+
+GraphId GPUSession::CompileGraphImpl(KernelGraphPtr graph) {
   // Prepare ms context info for dump .pb graph
   auto context_ptr = MsContext::GetInstance();
   MS_EXCEPTION_IF_NULL(context_ptr);
   bool save_graphs = context_ptr->get_param<bool>(MS_CTX_SAVE_GRAPHS_FLAG);
   // Dump .pb graph before graph optimization
   if (save_graphs) {
-    DumpIRProto(graph, "before_opt_" + std::to_string(graph_id));
+    DumpIRProto(graph, "before_opt_" + std::to_string(graph->graph_id()));
   }
   // Graph optimization irrelevant to device data format
   Optimize(graph);
@@ -326,7 +349,7 @@ GraphId GPUSession::CompileGraphImpl(const AnfNodePtrList &lst, const AnfNodePtr
   AssignStream(graph);
   // Dump .pb graph before remove nop nodes
   if (save_graphs) {
-    DumpIRProto(graph, "before_removeNop_" + std::to_string(graph_id));
+    DumpIRProto(graph, "before_removeNop_" + std::to_string(graph->graph_id()));
   }
   // Update Graph Dynamic Shape Attr.
   UpdateGraphDynamicShapeAttr(NOT_NULL(graph));
@@ -343,7 +366,7 @@ GraphId GPUSession::CompileGraphImpl(const AnfNodePtrList &lst, const AnfNodePtr
   SetSummaryNodes(graph.get());
   // Dump .pb graph after graph optimization
   if (save_graphs) {
-    DumpIRProto(graph, "after_opt_" + std::to_string(graph_id));
+    DumpIRProto(graph, "after_opt_" + std::to_string(graph->graph_id()));
   }
   // Set graph manager.
   MS_EXCEPTION_IF_NULL(context_);
@@ -361,9 +384,8 @@ GraphId GPUSession::CompileGraphImpl(const AnfNodePtrList &lst, const AnfNodePtr
     debugger_->LoadGraphs(graph);
   }
 #endif
-  MS_LOG(INFO) << "CompileGraph graph_id: " << graph_id;
-
-  return graph_id;
+  MS_LOG(INFO) << "CompileGraph graph_id: " << graph->graph_id();
+  return graph->graph_id();
 }
 
 void GPUSession::RunGraphImpl(const GraphId &graph_id, const std::vector<tensor::TensorPtr> &inputs,
@@ -418,8 +440,7 @@ void GPUSession::BuildOpImpl(const OpRunInfo &op_run_info, const GraphInfo &grap
   SelectKernel(kernel_graph);
   RunOpHardwareOptimize(kernel_graph);
   StartKernelRT();
-  // Hide NopOp from execution graph
-  opt::HideNopNode(kernel_graph.get());
+  RunOpHideNopNode(kernel_graph);
   BuildKernel(kernel_graph);
   run_op_graphs_[graph_info] = kernel_graph;
 }
@@ -434,8 +455,7 @@ void GPUSession::RunOpImpl(const GraphInfo &graph_info, OpRunInfo *op_run_info,
   // run op
   auto kernel_graph = run_op_graphs_[graph_info];
   MS_EXCEPTION_IF_NULL(kernel_graph);
-  // Remove NopOp from execution graph
-  opt::RemoveNopNode(kernel_graph.get());
+  RunOpRemoveNopNode(kernel_graph);
   RunOpAllocateMemory(*input_tensors, kernel_graph.get());
   // Execute the computation
   LoadInputData(kernel_graph, *input_tensors);
@@ -504,7 +524,7 @@ void GPUSession::SyncStream() {
   MS_EXCEPTION_IF_NULL(runtime_instance);
   auto ret = runtime_instance->SyncStream();
   if (!ret) {
-    MS_LOG(ERROR) << "Sync stream error!";
+    MS_LOG(EXCEPTION) << "Sync stream error!";
   }
 }
 }  // namespace gpu

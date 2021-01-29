@@ -48,7 +48,6 @@ static const std::vector<schema::PrimitiveType> nhwcOpList = {
   schema::PrimitiveType_FusedBatchNorm,
   schema::PrimitiveType_PReLU,
   schema::PrimitiveType_BiasAdd,
-  schema::PrimitiveType_InstanceNorm,
   schema::PrimitiveType_SpaceToDepth,
   schema::PrimitiveType_DepthToSpace,
   schema::PrimitiveType_TopK};
@@ -136,10 +135,10 @@ static const std::vector<schema::PrimitiveType> int8OpList = {schema::PrimitiveT
 
 static const std::vector<schema::PrimitiveType> needInsertOpList = {
 #ifdef SUPPORT_TRAIN
-  schema::PrimitiveType_Eltwise, schema::PrimitiveType_Activation,   schema::PrimitiveType_Concat,
-  schema::PrimitiveType_Power,   schema::PrimitiveType_StridedSlice, schema::PrimitiveType_Split,
-  schema::PrimitiveType_Slice,   schema::PrimitiveType_Crop,         schema::PrimitiveType_Mul,
-  schema::PrimitiveType_Add
+  schema::PrimitiveType_Eltwise,       schema::PrimitiveType_Activation,   schema::PrimitiveType_Concat,
+  schema::PrimitiveType_Power,         schema::PrimitiveType_StridedSlice, schema::PrimitiveType_Split,
+  schema::PrimitiveType_Crop,          schema::PrimitiveType_Mul,          schema::PrimitiveType_Add,
+  schema::PrimitiveType_ActivationGrad
 #else
   schema::PrimitiveType_Eltwise, schema::PrimitiveType_Activation,   schema::PrimitiveType_Concat,
   schema::PrimitiveType_Power,   schema::PrimitiveType_StridedSlice, schema::PrimitiveType_Add,

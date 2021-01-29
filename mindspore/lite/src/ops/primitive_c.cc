@@ -164,6 +164,11 @@
 #include "src/ops/select.h"
 #include "src/ops/gelu.h"
 #include "src/ops/gru.h"
+#include "src/ops/size.h"
+#include "src/ops/random_standard_normal.h"
+#include "src/ops/invert_permutation.h"
+#include "src/ops/crop_and_resize.h"
+#include "src/ops/nonzero.h"
 
 #ifdef SUPPORT_TRAIN
 #include "src/ops/neg_grad.h"
@@ -387,7 +392,9 @@ void PrimitiveC::set_input_quant_params(const std::vector<std::vector<schema::Qu
 }
 
 void PrimitiveC::set_input_quant_param(const size_t &index, const std::vector<schema::QuantParamT> &input_quant_param) {
-  MS_ASSERT(index < this->input_quant_param_.size());
+  if (index >= this->input_quant_param_.size()) {
+    this->input_quant_param_.resize(index + 1);
+  }
   this->input_quant_param_.at(index) = input_quant_param;
 }
 
@@ -444,6 +451,10 @@ void PrimitiveC::set_quant_type(const schema::QuantType &quant_type) { this->qua
 
 schema::QuantType PrimitiveC::quant_type() const { return quant_type_; }
 
+bool PrimitiveC::IsEnableHuffmanCode() const { return enableHuffmanCode; }
+
+void PrimitiveC::SetEnableHuffmanCode(bool enableHuffmanCode) { this->enableHuffmanCode = enableHuffmanCode; }
+
 std::shared_ptr<PrimitiveC> GetReturnPrim() {
   auto return_primitiveT = new (std::nothrow) schema::PrimitiveT;
   if (return_primitiveT == nullptr) {
@@ -493,7 +504,7 @@ std::shared_ptr<PrimitiveC> GetTupleGetItemPrim() {
 }
 
 template <typename T, typename = std::enable_if<std::is_base_of<PrimitiveC, T>::value>>
-std::shared_ptr<PrimitiveC> NewPrimitiveC(const Primitive &prim, const std::vector<AnfNodePtr> &inputs,
+std::shared_ptr<PrimitiveC> NewPrimitiveC(const mindspore::Primitive &prim, const std::vector<AnfNodePtr> &inputs,
                                           const schema::QuantType &quantType) {
   auto primc = std::make_shared<T>();
   if (primc == nullptr) {
@@ -669,7 +680,8 @@ std::shared_ptr<PrimitiveC> PrimitiveC::Create(const Primitive &prim, const std:
   } else if ((op_type == "ReluGrad" || op_type == "ReLU6Grad" || op_type == "SigmoidGrad" ||
               op_type == "HSigmoidGrad" || op_type == "HSwishGrad")) {
     return NewPrimitiveC<ActivationGrad>(prim, inputs, quantType);
-  } else if ((op_type == "MaxPoolGrad") || (op_type == "AvgPoolGrad") || (op_type == "AvgPoolGradGpu")) {
+  } else if ((op_type == "MaxPoolGrad") || (op_type == "AvgPoolGrad") || (op_type == "AvgPoolGradGpu") ||
+             (op_type == "AvgPoolGradCpu")) {
     return NewPrimitiveC<PoolingGrad>(prim, inputs, quantType);
   } else if (op_type == "Conv2DBackpropFilter") {
     return NewPrimitiveC<Conv2DGradFilter>(prim, inputs, quantType);
@@ -679,7 +691,7 @@ std::shared_ptr<PrimitiveC> PrimitiveC::Create(const Primitive &prim, const std:
     return NewPrimitiveC<BNGrad>(prim, inputs, quantType);
   } else if (op_type == "FlattenGrad") {
     return NewPrimitiveC<FlattenGrad>(prim, inputs, quantType);
-  } else if (op_type == "FusedBatchNormGrad") {
+  } else if ((op_type == "FusedBatchNormGrad") || (op_type == "FusedBatchNormGradCpu")) {
     return NewPrimitiveC<BNGrad>(prim, inputs, quantType);
   } else if (op_type == "PowerGrad") {
     return NewPrimitiveC<PowerGrad>(prim, inputs, quantType);
@@ -709,6 +721,8 @@ std::shared_ptr<PrimitiveC> PrimitiveC::Create(const Primitive &prim, const std:
     return NewPrimitiveC<SigmoidCrossEntropyWithLogits>(prim, inputs, quantType);
   } else if (op_type == "SigmoidCrossEntropyWithLogitsGrad") {
     return NewPrimitiveC<SigmoidCrossEntropyWithLogitsGrad>(prim, inputs, quantType);
+  } else if (op_type == "Pad") {
+    return NewPrimitiveC<Pad>(prim, inputs, quantType);
 #else
   } else if (op_type == "Conv2DBackpropInput") {
     return NewPrimitiveC<DeConv2D>(prim, inputs, quantType);
@@ -1004,6 +1018,16 @@ PrimitiveC *PrimitiveC::Create(mindspore::schema::PrimitiveT *primitive) {
       return new (std::nothrow) Select(primitive);
     case schema::PrimitiveType_Gru:
       return new (std::nothrow) Gru(primitive);
+    case schema::PrimitiveType_Size:
+      return new (std::nothrow) Size(primitive);
+    case schema::PrimitiveType_InvertPermutation:
+      return new (std::nothrow) InvertPermutation(primitive);
+    case schema::PrimitiveType_RandomStandardNormal:
+      return new (std::nothrow) RandomStandardNormal(primitive);
+    case schema::PrimitiveType_CropAndResize:
+      return new (std::nothrow) CropAndResize(primitive);
+    case schema::PrimitiveType_NonZero:
+      return new (std::nothrow) NonZero(primitive);
 #ifdef SUPPORT_TRAIN
     case schema::PrimitiveType_ActivationGrad:
       return new (std::nothrow) ActivationGrad(primitive);
@@ -1089,10 +1113,13 @@ schema::QuantType PrimitiveC::quant_type() const { return quant_type_; }
 #endif
 
 int PrimitiveC::Type() const {
-  if (this->primitive_ == nullptr) {
+  if (this->primitive_ == nullptr && this->op_type_ == OP_TYPE_NOT_SET) {
     return schema::PrimitiveType_NONE;
   }
 #ifdef PRIMITIVE_WRITEABLE
+  if (op_type_ != OP_TYPE_NOT_SET) {
+    return op_type_;
+  }
   return this->primitive_->value.type;
 #else
   return this->primitive_->value_type();

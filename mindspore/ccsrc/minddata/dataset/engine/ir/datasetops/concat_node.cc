@@ -35,11 +35,12 @@ ConcatNode::ConcatNode(const std::vector<std::shared_ptr<DatasetNode>> &datasets
     : sampler_(sampler),
       children_flag_and_nums_(children_flag_and_nums),
       children_start_end_index_(children_start_end_index) {
+  nary_op_ = true;
   for (auto const &child : datasets) AddChild(child);
 }
 
 std::shared_ptr<DatasetNode> ConcatNode::Copy() {
-  std::shared_ptr<SamplerObj> sampler = (sampler_ == nullptr) ? nullptr : sampler_->Copy();
+  std::shared_ptr<SamplerObj> sampler = (sampler_ == nullptr) ? nullptr : sampler_->SamplerCopy();
   // create an empty vector to copy a concat
   auto node = std::make_shared<ConcatNode>(std::vector<std::shared_ptr<DatasetNode>>(), sampler,
                                            children_flag_and_nums_, children_start_end_index_);
@@ -72,25 +73,70 @@ Status ConcatNode::ValidateParams() {
   return Status::OK();
 }
 
-Status ConcatNode::Build(std::vector<std::shared_ptr<DatasetOp>> *node_ops) {
+// Get Dataset size
+Status ConcatNode::GetDatasetSize(const std::shared_ptr<DatasetSizeGetter> &size_getter, bool estimate,
+                                  int64_t *dataset_size) {
+  if (dataset_size_ > 0) {
+    *dataset_size = dataset_size_;
+    return Status::OK();
+  }
+
+  // calculate the total size of all nodes
+  int64_t total_dataset_size = 0;
+  int64_t child_dataset_size = 0;
+  for (int idx = 0; idx < children_.size(); idx++) {
+    if (children_flag_and_nums_.empty() || children_flag_and_nums_[idx].second == 0) {
+      children_[idx]->GetDatasetSize(size_getter, false, &child_dataset_size);
+      total_dataset_size += child_dataset_size;
+    } else {
+      total_dataset_size += children_flag_and_nums_[idx].second;
+    }
+  }
+
+  // calculate the size of the shard
+  int64_t shard_dataset_size = 0;
+  std::shared_ptr<DistributedSamplerRT> sampler_rt =
+    sampler_ ? std::dynamic_pointer_cast<DistributedSamplerRT>(sampler_->SamplerBuild()) : nullptr;
+  if (sampler_rt != nullptr) {
+    sampler_rt->SetNumRowsInDataset(total_dataset_size);
+    sampler_rt->InitSampler();
+
+    // (total_size % num_shards != 0) & shard_id >= (remainder) ? CalculateNumSamples()-1 : CalculateNumSamples()
+    // example: 23 rows, 10 shards --> shard sizes = {3,3,3,2,2,2,2,2,2,2}
+    if ((sampler_rt->GetNumSamples() % sampler_rt->GetDeviceNum()) >= 0 &&
+        sampler_rt->GetDeviceID() >= (sampler_rt->GetNumSamples() % sampler_rt->GetDeviceNum())) {
+      shard_dataset_size = sampler_rt->GetNumSamples() / sampler_rt->GetDeviceNum();
+    } else {
+      shard_dataset_size = sampler_rt->GetNumSamples() / sampler_rt->GetDeviceNum() + 1;
+    }
+  } else {
+    shard_dataset_size = total_dataset_size;
+  }
+
+  *dataset_size = shard_dataset_size;
+  dataset_size_ = *dataset_size;
+  return Status::OK();
+}
+
+Status ConcatNode::Build(std::vector<std::shared_ptr<DatasetOp>> *const node_ops) {
   if (children_flag_and_nums_.empty() || children_start_end_index_.empty()) {
     node_ops->push_back(std::make_shared<ConcatOp>(connector_que_size_));
   } else {
-    node_ops->push_back(std::make_shared<ConcatOp>(connector_que_size_, sampler_->Build(), children_flag_and_nums_,
-                                                   children_start_end_index_));
+    node_ops->push_back(std::make_shared<ConcatOp>(connector_que_size_, sampler_->SamplerBuild(),
+                                                   children_flag_and_nums_, children_start_end_index_));
   }
 
   return Status::OK();
 }
 
 // Visitor accepting method for IRNodePass
-Status ConcatNode::Accept(IRNodePass *p, bool *modified) {
+Status ConcatNode::Accept(IRNodePass *const p, bool *const modified) {
   // Downcast shared pointer then call visitor
   return p->Visit(shared_from_base<ConcatNode>(), modified);
 }
 
 // Visitor accepting method for IRNodePass
-Status ConcatNode::AcceptAfter(IRNodePass *p, bool *modified) {
+Status ConcatNode::AcceptAfter(IRNodePass *const p, bool *const modified) {
   // Downcast shared pointer then call visitor
   return p->VisitAfter(shared_from_base<ConcatNode>(), modified);
 }

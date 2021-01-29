@@ -31,7 +31,7 @@ using mindspore::schema::PrimitiveType_TensorListStack;
 namespace mindspore::kernel {
 
 int TensorListStackCPUKernel::CheckParam() {
-  if (input0_->tensors_data_type() != dtype_) {
+  if (dtype_ != kTypeUnknown && input0_->tensors_data_type() != dtype_) {
     MS_LOG(ERROR) << "in_tensors_[0].tensors_data_type:[" << input0_->tensors_data_type() << "] must be equal "
                   << "param.data_type:[" << dtype_ << "]";
     return RET_ERROR;
@@ -60,6 +60,11 @@ int TensorListStackCPUKernel::Init() {
   MS_ASSERT(input0_ != nullptr);
   output0_ = out_tensors_[0];
   MS_ASSERT(output0_ != nullptr);
+#ifdef ENABLE_FP16
+  if (lite::IsSupportFloat16() && context_->IsCpuFloat16Enabled() && dtype_ == kNumberTypeFloat32) {
+    dtype_ = kNumberTypeFloat16;
+  }
+#endif
   return RET_OK;
 }
 
@@ -113,6 +118,16 @@ int TensorListStackCPUKernel::MergeElementShape() {
 int TensorListStackCPUKernel::MergeSubShape(const std::vector<int> &shape) {
   size_t dim0 = shape.size();
   size_t dim1 = output_shape_.size();
+  // unknown shape use input element shape
+  if (dim1 != 0 && output_shape_[0] == -1) {
+    if (dim0 == 0) {
+      output_shape_.clear();
+      output_shape_.emplace_back(1);
+    } else {
+      output_shape_ = shape;
+    }
+    return RET_OK;
+  }
   if (dim1 != dim0) {
     MS_LOG(ERROR) << "shape.size():" << dim1 << " must be equal output_shape_.size():" << dim0;
     return RET_ERROR;
@@ -149,17 +164,21 @@ int TensorListStackCPUKernel::Run() {
     MS_LOG(ERROR) << "out_tensors_[0]->ElementsNum():" << out_ele_num << "must be equal to in_ele_num:" << in_ele_num;
     return RET_ERROR;
   }
-  auto out_ptr = reinterpret_cast<float *>(output0_->MutableData());
+  auto out_data = reinterpret_cast<char *>(output0_->MutableData());
+  auto unknown_type_offset = TypeUnknownSize * lite::DataTypeSize(dtype_);
+  MS_ASSERT(out_data != nullptr);
   for (int i = 0; i < num_element_; ++i) {
     auto in_ptr = input0_->GetTensor(i);
     MS_ASSERT(in_ptr != nullptr);
     if (in_ptr->data_type() != kTypeUnknown) {
-      int in_size = in_ptr->ElementsNum();
-      memcpy(out_ptr, in_ptr->data_c(), in_size * sizeof(float));
-      out_ptr += in_size;
+      int data_size = in_ptr->ElementsNum() * lite::DataTypeSize(dtype_);
+      auto in_data = in_ptr->data_c();
+      MS_ASSERT(in_data != nullptr);
+      memcpy(out_data, in_data, data_size);
+      out_data += data_size;
     } else {
-      memset(out_ptr, 0, TypeUnknownSize * sizeof(float));
-      out_ptr += TypeUnknownSize;
+      memset(out_data, 0, unknown_type_offset);
+      out_data += unknown_type_offset;
     }
   }
   return RET_OK;
@@ -168,5 +187,6 @@ int TensorListStackCPUKernel::Run() {
 int TensorListStackCPUKernel::ReSize() { return RET_OK; }
 
 REG_KERNEL(kCPU, kNumberTypeFloat32, PrimitiveType_TensorListStack, LiteKernelCreator<TensorListStackCPUKernel>)
+REG_KERNEL(kCPU, kNumberTypeFloat16, PrimitiveType_TensorListStack, LiteKernelCreator<TensorListStackCPUKernel>)
 REG_KERNEL(kCPU, kNumberTypeInt32, PrimitiveType_TensorListStack, LiteKernelCreator<TensorListStackCPUKernel>)
 }  // namespace mindspore::kernel

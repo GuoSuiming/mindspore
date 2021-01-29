@@ -15,6 +15,7 @@
  */
 
 #include "src/ops/space_to_batch_nd.h"
+#include <limits>
 #include "src/common/common.h"
 
 #ifndef PRIMITIVE_WRITEABLE
@@ -102,8 +103,8 @@ int SpaceToBatchND::InferShape(std::vector<lite::Tensor *> inputs, std::vector<l
     return RET_INFER_INVALID;
   }
   auto input_shape = input->shape();
-  if (input_shape.size() != kDimension_4d) {
-    MS_LOG(ERROR) << "input shape dimension size only support " << kDimension_4d << " now!";
+  if (input_shape.size() != kQuadrupleNum) {
+    MS_LOG(ERROR) << "input shape dimension size only support " << kQuadrupleNum << " now!";
     return RET_ERROR;
   }
   auto block_shape = GetBlockShape();

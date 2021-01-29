@@ -53,8 +53,8 @@ def init_var_dict(init_args, in_vars):
     '''
     var_map = {}
     _, _max_val = init_args
-    for _, iterm in enumerate(in_vars):
-        key, shape, method = iterm
+    for _, item in enumerate(in_vars):
+        key, shape, method = item
         if key not in var_map.keys():
             if method in ['random', 'uniform']:
                 var_map[key] = Parameter(initializer(
@@ -212,7 +212,6 @@ class WideDeepModel(nn.Cell):
                 self.deep_embeddinglookup = nn.EmbeddingLookup(self.vocab_size, self.emb_dim, target=target,
                                                                slice_mode=nn.EmbeddingLookup.TABLE_COLUMN_SLICE)
                 self.dense_layer_1.dropout.dropout.shard(((1, get_group_size()),))
-                self.dense_layer_1.dropout.dropout_do_mask.shard(((1, get_group_size()),))
                 self.dense_layer_1.matmul.shard(((1, get_group_size()), (get_group_size(), 1)))
                 self.dense_layer_1.matmul.add_prim_attr("field_size", self.field_size)
                 self.deep_mul.shard(((1, 1, get_group_size()), (1, 1, 1)))
@@ -234,7 +233,6 @@ class WideDeepModel(nn.Cell):
             self.wide_mul.shard(((1, get_group_size(), 1), (1, get_group_size(), 1)))
             self.reduce_sum.shard(((1, get_group_size(), 1),))
             self.dense_layer_1.dropout.dropout.shard(((1, get_group_size()),))
-            self.dense_layer_1.dropout.dropout_do_mask.shard(((1, get_group_size()),))
             self.dense_layer_1.matmul.shard(((1, get_group_size()), (get_group_size(), 1)))
             self.embedding_table = self.deep_embeddinglookup.embedding_table
         elif parameter_server:
@@ -259,9 +257,11 @@ class WideDeepModel(nn.Cell):
             self.wide_embeddinglookup.embedding_table.set_param_ps()
         else:
             self.deep_embeddinglookup = nn.EmbeddingLookup(self.vocab_size, self.emb_dim,
-                                                           target='DEVICE', sparse=sparse)
+                                                           target='DEVICE', sparse=sparse,
+                                                           vocab_cache_size=self.vocab_cache_size)
             self.wide_embeddinglookup = nn.EmbeddingLookup(self.vocab_size, 1,
-                                                           target='DEVICE', sparse=sparse)
+                                                           target='DEVICE', sparse=sparse,
+                                                           vocab_cache_size=self.vocab_cache_size)
             self.embedding_table = self.deep_embeddinglookup.embedding_table
 
     def construct(self, id_hldr, wt_hldr):

@@ -62,6 +62,10 @@ def _init_device_info():
             rank_id = int(env_rank_id.strip())
             if rank_size > 1:
                 _config.set_rank_id(rank_id)
+            # Now single process under ascend mode doesn't support numa bind for performance consideration.
+            if _config.get_numa_enable() is True and rank_size == 1:
+                raise ValueError("single process under Ascend mode doesn't support numa bind for "
+                                 "performance consideration.")
 
 
 def set_seed(seed):
@@ -98,7 +102,7 @@ def get_seed():
     Get the seed.
 
     Returns:
-        Int, seed.
+        int, seed.
     """
     return _config.get_seed()
 
@@ -127,7 +131,7 @@ def get_prefetch_size():
     Get the prefetch size in number of rows.
 
     Returns:
-        Size, total number of rows to be prefetched.
+        int, total number of rows to be prefetched.
     """
     return _config.get_op_connector_size()
 
@@ -158,9 +162,40 @@ def get_num_parallel_workers():
     This is the DEFAULT num_parallel_workers value used for each op, it is not related to AutoNumWorker feature.
 
     Returns:
-        Int, number of parallel workers to be used as a default for each operation
+        int, number of parallel workers to be used as a default for each operation.
     """
     return _config.get_num_parallel_workers()
+
+
+def set_numa_enable(numa_enable):
+    """
+    Set the default state of numa enabled.
+
+    Args:
+        numa_enable (bool): Whether to use numa bind feature.
+
+    Raises:
+        TypeError: If numa_enable is not a boolean data type.
+
+    Examples:
+        >>> # Set a new global configuration value for the state of numa enabled.
+        >>> # Now parallel dataset operators will run with numa bind function
+        >>> ds.config.set_numa_enable(True)
+    """
+    if not isinstance(numa_enable, bool):
+        raise TypeError("numa_enable must be a boolean dtype.")
+    _config.set_numa_enable(numa_enable)
+
+
+def get_numa_enable():
+    """
+    Get the default state of numa enabled.
+    This is the DEFAULT numa enabled value used for the all process.
+
+    Returns:
+        bool, the default state of numa enabled.
+    """
+    return _config.get_numa_enable()
 
 
 def set_monitor_sampling_interval(interval):
@@ -187,7 +222,7 @@ def get_monitor_sampling_interval():
     Get the default interval of performance monitor sampling.
 
     Returns:
-        Int, interval (in milliseconds) for performance monitor sampling.
+        int, interval (in milliseconds) for performance monitor sampling.
     """
     return _config.get_monitor_sampling_interval()
 
@@ -245,7 +280,8 @@ def get_auto_num_workers():
     Get the setting (turned on or off) automatic number of workers.
 
     Returns:
-        Bool, whether auto num worker feature is turned on
+        bool, whether auto num worker feature is turned on.
+
     Examples:
         >>> num_workers = ds.config.get_auto_num_workers()
     """
@@ -278,7 +314,7 @@ def get_callback_timeout():
     In case of a deadlock, the wait function will exit after the timeout period.
 
     Returns:
-        Int, the duration in seconds
+        int, the duration in seconds.
     """
     return _config.get_callback_timeout()
 
@@ -288,7 +324,7 @@ def __str__():
     String representation of the configurations.
 
     Returns:
-        Str, configurations.
+        str, configurations.
     """
     return str(_config)
 

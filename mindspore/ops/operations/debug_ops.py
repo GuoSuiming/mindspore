@@ -1,4 +1,4 @@
-# Copyright 2020 Huawei Technologies Co., Ltd
+# Copyright 2020-2021 Huawei Technologies Co., Ltd
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,14 +15,24 @@
 
 """debug_ops"""
 from types import FunctionType, MethodType
+
+from mindspore import context
 from ..._checkparam import Validator as validator
 from ..._checkparam import Rel
 from ...common import dtype as mstype
 from ..primitive import prim_attr_register, PrimitiveWithInfer
 
 
+def _check_mode(class_name):
+    """Check for PyNative mode."""
+    mode = context.get_context('mode')
+    if mode == context.PYNATIVE_MODE:
+        raise RuntimeError(f'{class_name} operator does not support PyNative mode.')
+
+
 def _check_summary_param(name, value, class_name):
     """Checks the name and value is valid for summary."""
+    _check_mode(class_name)
     n_type = name['dtype']
     n_value = name['value']
     validator.check_value_type('name', n_type, [type(mstype.string)], class_name)
@@ -329,13 +339,15 @@ class Print(PrimitiveWithInfer):
 
     Note:
         In pynative mode, please use python print function.
+        In graph mode, the bool, int, float, tuple, and list would be converted into Tensor to print,
+        str remains unchanged.
 
     Inputs:
-        - **input_x** (Union[Tensor, str]) - The graph node to attach to. The input supports
-          multiple strings and tensors which are separated by ','.
+        - **input_x** (Union[Tensor, bool, int, float, str, tuple, list]) - The graph node to attach to.
+          Supports multiple inputs which are separated by ','.
 
     Supported Platforms:
-        ``Ascend``
+        ``Ascend`` ``GPU``
 
     Examples:
         >>> class PrintDemo(nn.Cell):
@@ -370,8 +382,13 @@ class Print(PrimitiveWithInfer):
         return [1]
 
     def infer_dtype(self, *inputs):
-        for dtype in inputs:
-            validator.check_subclass("input", dtype, (mstype.tensor, mstype.string), self.name)
+        for ele in inputs:
+            if isinstance(ele, (tuple, list)):
+                self.infer_dtype(*ele)
+            else:
+                validator.check_subclass("input", ele,
+                                         [mstype.tensor, mstype.int_, mstype.float_, mstype.bool_, mstype.string],
+                                         self.name)
         return mstype.int32
 
 

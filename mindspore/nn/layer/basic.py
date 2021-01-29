@@ -37,10 +37,13 @@ __all__ = ['Dropout', 'Flatten', 'Dense', 'ClipByNorm', 'Norm', 'OneHot', 'Pad',
 
 
 class L1Regularizer(Cell):
-    """
+    r"""
     Apply l1 regularization to weights
 
     l1 regularization makes weights sparsity
+
+    .. math::
+        \text{loss}=\lambda * \text{reduce_sum}(\text{abs}(\omega))
 
     Note:
         scale(regularization factor) should be a number which greater than 0
@@ -95,18 +98,18 @@ class Dropout(Cell):
     Randomly set some elements of the input tensor to zero with probability :math:`1 - keep\_prob` during training
     using samples from a Bernoulli distribution.
 
+    The outputs are scaled by a factor of :math:`\frac{1}{keep\_prob}`    during training so
+    that the output layer remains at a similar scale. During inference, this
+    layer returns the same tensor as the input.
+
+    This technique is proposed in paper `Dropout: A Simple Way to Prevent Neural Networks from Overfitting
+    <http://www.cs.toronto.edu/~rsalakhu/papers/srivastava14a.pdf>`_ and proved to be effective to reduce
+    over-fitting and prevents neurons from co-adaptation. See more details in `Improving neural networks by
+    preventing co-adaptation of feature detectors
+    <https://arxiv.org/pdf/1207.0580.pdf>`_.
+
     Note:
         Each channel will be zeroed out independently on every construct call.
-
-        The outputs are scaled by a factor of :math:`\frac{1}{keep\_prob}`    during training so
-        that the output layer remains at a similar scale. During inference, this
-        layer returns the same tensor as the input.
-
-        This technique is proposed in paper `Dropout: A Simple Way to Prevent Neural Networks from Overfitting
-        <http://www.cs.toronto.edu/~rsalakhu/papers/srivastava14a.pdf>`_ and proved to be effective to reduce
-        over-fitting and prevents neurons from co-adaptation. See more details in `Improving neural networks by
-        preventing co-adaptation of feature detectors
-        <https://arxiv.org/pdf/1207.0580.pdf>`_.
 
     Args:
         keep_prob (float): The keep rate, greater than 0 and less equal than 1. E.g. rate=0.9,
@@ -129,7 +132,7 @@ class Dropout(Cell):
         >>> x = Tensor(np.ones([2, 2, 3]), mindspore.float32)
         >>> net = nn.Dropout(keep_prob=0.8)
         >>> net.set_train()
-        Dropout<keep_prob=0.8, dtype=Float32>
+        Dropout<keep_prob=0.8>
         >>> output = net(x)
         >>> print(output.shape)
         (2, 2, 3)
@@ -158,7 +161,7 @@ class Dropout(Cell):
         return out
 
     def extend_repr(self):
-        return 'keep_prob={}, dtype={}'.format(self.keep_prob, self.dtype)
+        return 'keep_prob={}'.format(self.keep_prob)
 
 
 class Flatten(Cell):
@@ -191,15 +194,6 @@ class Flatten(Cell):
 
     def construct(self, x):
         return F.reshape(x, (F.shape(x)[0], -1))
-
-
-@constexpr
-def get_broadcast_weight_bias_shape(x_shape, out_channel, in_channel):
-    """get broadcast_weight_bias shape"""
-    broad_weight_shape = x_shape[:-2] + (out_channel, in_channel)
-    broad_bias_shape = x_shape[:-1] + (out_channel,)
-    return broad_weight_shape, broad_bias_shape
-
 
 class Dense(Cell):
     r"""
@@ -246,7 +240,7 @@ class Dense(Cell):
         (2, 4)
     """
 
-    @cell_attr_register(attrs=['has_bias', 'activation', 'in_channels', 'out_channels'])
+    @cell_attr_register(attrs=['has_bias', 'activation'])
     def __init__(self,
                  in_channels,
                  out_channels,
@@ -258,7 +252,9 @@ class Dense(Cell):
         self.in_channels = Validator.check_positive_int(in_channels)
         self.out_channels = Validator.check_positive_int(out_channels)
         self.has_bias = Validator.check_bool(has_bias)
+        self.reshape = P.Reshape()
         self.shape_op = P.Shape()
+
 
         if isinstance(weight_init, Tensor):
             if weight_init.ndim != 2 or weight_init.shape[0] != out_channels or \
@@ -273,10 +269,8 @@ class Dense(Cell):
                     raise ValueError("Bias init shape error.")
             self.bias = Parameter(initializer(bias_init, [out_channels]), name="bias")
             self.bias_add = P.BiasAdd()
-            self.tensor_add = P.TensorAdd()
 
         self.matmul = P.MatMul(transpose_b=True)
-        self.batch_matmul = P.BatchMatMul(transpose_b=True)
         self.activation = get_activation(activation) if isinstance(activation, str) else activation
         if activation is not None and not isinstance(self.activation, (Cell, Primitive)):
             raise TypeError("The activation must be str or Cell or Primitive,"" but got {}.".format(activation))
@@ -284,27 +278,16 @@ class Dense(Cell):
 
     def construct(self, x):
         x_shape = self.shape_op(x)
-        x_dim = len(x_shape)
-        if x_dim == 2:
-            matmul = self.matmul
-            bias_add = self.bias_add if self.has_bias else None
-            weight = self.weight
-            bias = self.bias
-        else:
-            broad_weight_shape, broad_bias_shape = get_broadcast_weight_bias_shape(x_shape, self.out_channels,
-                                                                                   self.in_channels)
-            weight_broadcast_to = P.BroadcastTo(broad_weight_shape)
-            bias_broadcast_to = P.BroadcastTo(broad_bias_shape)
-            matmul = self.batch_matmul
-            bias_add = self.tensor_add if self.has_bias else None
-            weight = weight_broadcast_to(self.weight)
-            bias = bias_broadcast_to(self.bias) if self.has_bias else self.bias
-
-        x = matmul(x, weight)
+        if len(x_shape) != 2:
+            x = self.reshape(x, (-1, x_shape[-1]))
+        x = self.matmul(x, self.weight)
         if self.has_bias:
-            x = bias_add(x, bias)
+            x = self.bias_add(x, self.bias)
         if self.activation_flag:
             x = self.activation(x)
+        if len(x_shape) != 2:
+            out_shape = x_shape[:-1] + (-1,)
+            x = self.reshape(x, out_shape)
         return x
 
     def extend_repr(self):
@@ -424,8 +407,12 @@ class ClipByNorm(Cell):
 
 
 class Norm(Cell):
-    """
+    r"""
     Computes the norm of vectors, currently including Euclidean norm, i.e., :math:`L_2`-norm.
+
+    .. math::
+
+        norm(x) = \sqrt{\sum_{i=1}^{n} (x_i^2)}
 
     Args:
         axis (Union[tuple, int]): The axis over which to compute vector norms. Default: ().
@@ -474,12 +461,32 @@ class OneHot(Cell):
     """
     Returns a one-hot tensor.
 
-    The locations represented by indices in argument 'indices' take value on_value,
+    The locations represented by indices in argument `indices` take value on_value,
     while all other locations take value off_value.
 
     Note:
         If the input indices is rank :math:`N`, the output will have rank :math:`N+1`. The new
         axis is created at dimension `axis`.
+
+    If `indices` is a scalar, the output shape will be a vector of length `depth`.
+
+    If `indices` is a vector of length `features`, the output shape will be:
+
+    .. code-block::
+
+        features * depth if axis == -1
+
+        depth * features if axis == 0
+
+    If `indices` is a matrix with shape `[batch, features]`, the output shape will be:
+
+    .. code-block::
+
+        batch * features * depth if axis == -1
+
+        batch * depth * features if axis == 1
+
+        depth * batch * features if axis == 0
 
     Args:
         axis (int): Features x depth if axis is -1, depth x features
@@ -496,7 +503,7 @@ class OneHot(Cell):
         - **indices** (Tensor) - A tensor of indices of data type mindspore.int32 and arbitrary shape.
 
     Outputs:
-        Tensor, the one-hot tensor of data type 'dtype' with dimension at 'axis' expanded to 'depth' and filled with
+        Tensor, the one-hot tensor of data type `dtype` with dimension at `axis` expanded to `depth` and filled with
         on_value and off_value.
 
     Supported Platforms:
@@ -537,7 +544,13 @@ class Pad(Cell):
         paddings (tuple): The shape of parameter `paddings` is (N, 2). N is the rank of input data. All elements of
             paddings are int type. For `D` th dimension of input, paddings[D, 0] indicates how many sizes to be
             extended ahead of the `D` th dimension of the input tensor, and paddings[D, 1] indicates how many sizes to
-            be extended behind of the `D` th dimension of the input tensor.
+            be extended behind of the `D` th dimension of the input tensor. The padded size of each dimension D of the
+            output is:
+
+            .. code-block::
+
+                paddings[D, 0] + input_x.dim_size(D) + paddings[D, 1]
+
         mode (str): Specifies padding mode. The optional values are "CONSTANT", "REFLECT", "SYMMETRIC".
             Default: "CONSTANT".
 
@@ -550,7 +563,7 @@ class Pad(Cell):
         - If `mode` is "CONSTANT", it fills the edge with 0, regardless of the values of the `input_x`.
           If the `input_x` is [[1,2,3], [4,5,6], [7,8,9]] and `paddings` is [[1,1], [2,2]], then the
           Outputs is [[0,0,0,0,0,0,0], [0,0,1,2,3,0,0], [0,0,4,5,6,0,0], [0,0,7,8,9,0,0], [0,0,0,0,0,0,0]].
-        - If `mode` is "REFLECT", it uses a way of symmetrical copying throught the axis of symmetry to fill in.
+        - If `mode` is "REFLECT", it uses a way of symmetrical copying through the axis of symmetry to fill in.
           If the `input_x` is [[1,2,3], [4,5,6], [7,8,9]] and `paddings` is [[1,1], [2,2]], then the
           Outputs is [[6,5,4,5,6,5,4], [3,2,1,2,3,2,1], [6,5,4,5,6,5,4], [9,8,7,8,9,8,7], [6,5,4,5,6,5,4]].
         - If `mode` is "SYMMETRIC", the filling method is similar to the "REFLECT". It is also copied
@@ -694,8 +707,16 @@ class Unfold(Cell):
           data type is number.
 
     Outputs:
-        Tensor, a 4-D tensor whose data type is same as 'input_x',
-        and the shape is [out_batch, out_depth, out_row, out_col], the out_batch is the same as the in_batch.
+        Tensor, a 4-D tensor whose data type is same as `input_x`,
+        and the shape is [out_batch, out_depth, out_row, out_col] where `out_batch` is the same as the `in_batch`.
+
+        .. code-block::
+
+            out_depth = ksize_row * ksize_col * in_depth
+
+            out_row = (in_row - (ksize_row + (ksize_row - 1) * (rate_row - 1))) // stride_row + 1
+
+            out_col = (in_col - (ksize_col + (ksize_col - 1) * (rate_col - 1))) // stride_col + 1
 
     Supported Platforms:
         ``Ascend``
@@ -837,8 +858,15 @@ def _get_matrix_diag_part_assist(x_shape, x_dtype):
 
 
 class MatrixDiag(Cell):
-    """
+    r"""
     Returns a batched diagonal tensor with a given batched diagonal values.
+
+    Assume `x` has :math:`k` dimensions :math:`[I, J, K, ..., N]`, then the output is a tensor of rank
+    :math:`k+1` with dimensions :math:`[I, J, K, ..., N, N]` where:
+
+    .. code-block::
+
+        output[i, j, k, ..., m, n] = 1{m=n} * x[i, j, k, ..., n]
 
     Inputs:
         - **x** (Tensor) - The diagonal values. It can be one of the following data types:
@@ -876,6 +904,13 @@ class MatrixDiagPart(Cell):
     r"""
     Returns the batched diagonal part of a batched tensor.
 
+    Assume `x` has :math:`k` dimensions :math:`[I, J, K, ..., M, N]`, then the output is a tensor of rank
+    :math:`k-1` with dimensions :math:`[I, J, K, ..., min(M, N)]` where:
+
+    .. code-block::
+
+        output[i, j, k, ..., n] = x[i, j, k, ..., n, n]
+
     Inputs:
         - **x** (Tensor) - The batched tensor. It can be one of the following data types:
           float32, float16, int32, int8, and uint8.
@@ -912,6 +947,16 @@ class MatrixDiagPart(Cell):
 class MatrixSetDiag(Cell):
     r"""
     Modifies the batched diagonal part of a batched tensor.
+
+    Assume `x` has :math:`k+1` dimensions :math:`[I, J, K, ..., M, N]` and `diagonal` has :math:`k`
+    dimensions :math:`[I, J, K, ..., min(M, N)]`. Then the output is a tensor of rank :math:`k+1` with dimensions
+    :math:`[I, J, K, ..., M, N]` where:
+
+    .. code-block::
+
+        output[i, j, k, ..., m, n] = diagnoal[i, j, k, ..., n] for m == n
+
+        output[i, j, k, ..., m, n] = x[i, j, k, ..., m, n] for m != n
 
     Inputs:
         - **x** (Tensor) - The batched tensor. Rank k+1, where k >= 1. It can be one of the following data types:

@@ -125,7 +125,7 @@ class SessionBasic : public std::enable_shared_from_this<SessionBasic> {
 #endif
 
  private:
-  CNodePtr CreateSwitchInput(const AnfNodePtr &node_input, KernelGraph *graph);
+  CNodePtr CreateSwitchInput(const CNodePtr &cnode, const AnfNodePtr &node_input, KernelGraph *graph);
   std::vector<AnfNodePtr> CreateSwitchOrPartialNode(const CNodePtr &cnode, KernelGraph *graph);
   std::vector<AnfNodePtr> CreateValueNode(const CNodePtr &cnode, KernelGraph *graph);
   void CreateCNodeInputs(const CNodePtr &cnode, KernelGraph *graph, std::vector<AnfNodePtr> *cnode_inputs);
@@ -133,6 +133,8 @@ class SessionBasic : public std::enable_shared_from_this<SessionBasic> {
   void GetCNodeInfo(const CNodePtr &cnode, std::vector<AnfNodePtr> *cnode_inputs);
   void GetNewCNodeInputs(const CNodePtr &cnode, KernelGraph *graph, std::vector<AnfNodePtr> *cnode_inputs,
                          std::unordered_map<AnfNodePtr, AnfNodePtr> *other_graph_cnode);
+  std::vector<AnfNodePtr> CreateCallSwitchLayerInputs(const CNodePtr &cnode, KernelGraph *graph);
+  void CreateCallNodeReturnFunction(const CNodePtr &cnode, const AnfNodePtr &real_input);
 
  protected:
   friend class Executor;
@@ -194,6 +196,8 @@ class SessionBasic : public std::enable_shared_from_this<SessionBasic> {
   AnfNodePtr FindPullNode(const AnfNodePtr &push_node, const std::vector<AnfNodePtr> &node_list);
   void UpdateGraphDynamicShapeAttr(const NotNull<KernelGraphPtr> &root_graph);
   void UpdateAllGraphDynamicShapeAttr(const std::vector<KernelGraphPtr> &all_graphs);
+  void RunOpRemoveNopNode(const KernelGraphPtr &kernel_graph) const;
+  void RunOpHideNopNode(const KernelGraphPtr &kernel_graph) const;
 #if (ENABLE_CPU && (ENABLE_D || ENABLE_GPU))
   void CheckPSModeConsistence(const KernelGraphPtr &kernel_graph) const;
   void GetBatchElements(const AnfNodePtr &kernel_node) const;

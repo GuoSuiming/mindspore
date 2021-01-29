@@ -80,6 +80,8 @@ OptimizeIRPassLib::OptimizeIRPassLib() {
     {prim::kPrimReduceMean, prim::kPrimReduceAll, prim::kPrimReduceSum, prim::kPrimReduceMax, prim::kPrimReduceMin});
   partial_eliminate_ = MakeSubstitution(std::make_shared<PartialEliminater>(), "partial_eliminate", IsCNodeDup);
   same_eliminate_ = MakeSubstitution(std::make_shared<SameEliminater>(), "same_eliminate", prim::kPrimSameTypeShape);
+  mirror_mini_step_elim_ = MakeSubstitution(std::make_shared<MirrorMiniStepEliminater>(), "mirror_mini_step_eliminate",
+                                            prim::kPrimMirrorMiniStep);
   check_bprop_eliminate_ =
     MakeSubstitution(std::make_shared<CheckBpropEliminater>(), "check_bprop_eliminate", prim::kPrimCheckBprop);
   reset_defer_inline_ =
@@ -200,10 +202,11 @@ OptimizeIRPassLib::OptimizeIRPassLib() {
 }
 
 ResolveIRPassLib::ResolveIRPassLib() {
-  resolver_resolve_attr_ =
-    MakeSubstitution(std::make_shared<ResolveAttr>(), "resolver_resolve_attr", prim::kPrimGetAttr);
+  resolver_resolve_and_getattr_ =
+    MakeSubstitution(std::make_shared<ResolverResolveAndGetAttr>(), "resolver_resolve_and_getattr",
+                     {prim::kPrimGetAttr, prim::kPrimResolve});
   resolver_resolve_ = MakeSubstitution(std::make_shared<ResolverResolve>(), "resolver_resolve", prim::kPrimResolve);
-  resolver_getattr_ = MakeSubstitution(std::make_shared<ResolverGetattr>(), "resolver_getattr", prim::kPrimGetAttr);
+  resolver_getattr_ = MakeSubstitution(std::make_shared<ResolverGetAttr>(), "resolver_getattr", prim::kPrimGetAttr);
 }
 
 InferenceOptPrepareLib::InferenceOptPrepareLib() {

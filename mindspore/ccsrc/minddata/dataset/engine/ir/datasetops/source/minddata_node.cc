@@ -23,8 +23,9 @@
 #include <vector>
 
 #include "minddata/dataset/engine/datasetops/source/mindrecord_op.h"
-
+#include "minddata/dataset/engine/opt/pass.h"
 #include "minddata/dataset/util/status.h"
+
 namespace mindspore {
 namespace dataset {
 
@@ -54,7 +55,7 @@ MindDataNode::MindDataNode(const std::string &dataset_file, const std::vector<st
 
 std::shared_ptr<DatasetNode> MindDataNode::Copy() {
   std::shared_ptr<MindDataNode> node;
-  std::shared_ptr<SamplerObj> sampler = (sampler_ == nullptr) ? nullptr : sampler_->Copy();
+  std::shared_ptr<SamplerObj> sampler = (sampler_ == nullptr) ? nullptr : sampler_->SamplerCopy();
   if (dataset_files_.empty()) {
     node = std::make_shared<MindDataNode>(dataset_file_, columns_list_, sampler, padded_sample_, num_padded_);
   } else {
@@ -150,7 +151,7 @@ Status MindDataNode::BuildMindDatasetSamplerChain(const std::shared_ptr<SamplerO
 // Helper function to set sample_bytes from py::byte type
 void MindDataNode::SetSampleBytes(std::map<std::string, std::string> *sample_bytes) { sample_bytes_ = *sample_bytes; }
 
-Status MindDataNode::Build(std::vector<std::shared_ptr<DatasetOp>> *node_ops) {
+Status MindDataNode::Build(std::vector<std::shared_ptr<DatasetOp>> *const node_ops) {
   RETURN_IF_NOT_OK(BuildMindDatasetSamplerChain(sampler_, &operators_, num_padded_));
 
   std::shared_ptr<MindRecordOp> mindrecord_op;
@@ -187,7 +188,7 @@ Status MindDataNode::GetDatasetSize(const std::shared_ptr<DatasetSizeGetter> &si
     *dataset_size = dataset_size_;
     return Status::OK();
   }
-  int64_t num_rows;
+  int64_t num_rows = -1;
   std::vector<std::shared_ptr<ShardOperator>> operators;
   RETURN_IF_NOT_OK(BuildMindDatasetSamplerChain(sampler_, &operators, num_padded_));
 
@@ -203,5 +204,16 @@ Status MindDataNode::GetDatasetSize(const std::shared_ptr<DatasetSizeGetter> &si
   return Status::OK();
 }
 
+// Visitor accepting method for IRNodePass
+Status MindDataNode::Accept(IRNodePass *const p, bool *const modified) {
+  // Downcast shared pointer then call visitor
+  return p->Visit(shared_from_base<MindDataNode>(), modified);
+}
+
+// Visitor accepting method for IRNodePass
+Status MindDataNode::AcceptAfter(IRNodePass *p, bool *const modified) {
+  // Downcast shared pointer then call visitor
+  return p->VisitAfter(shared_from_base<MindDataNode>(), modified);
+}
 }  // namespace dataset
 }  // namespace mindspore

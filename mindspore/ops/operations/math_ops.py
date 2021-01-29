@@ -23,7 +23,7 @@ from .. import signature as sig
 from ..._checkparam import Validator as validator
 from ..._checkparam import Rel
 from ...common import dtype as mstype
-from ...common.tensor import Tensor, MetaTensor
+from ...common.tensor import Tensor
 from .._utils import get_broadcast_shape
 from ..primitive import PrimitiveWithInfer, PrimitiveWithCheck, prim_attr_register, _run_op
 
@@ -115,7 +115,7 @@ class _BitwiseBinaryOp(_MathBinaryOp):
 
 
 class TensorAdd(_MathBinaryOp):
-    """
+    r"""
     Adds two input tensors element-wise.
 
     Inputs of `input_x` and `input_y` comply with the implicit type conversion rules to make the data types consistent.
@@ -124,6 +124,10 @@ class TensorAdd(_MathBinaryOp):
     dtypes of them cannot be both bool, and the shapes of them could be broadcast.
     When the inputs are one tensor and one scalar,
     the scalar could only be a constant.
+
+    .. math::
+
+        out_{i} = x_{i} + y_{i}
 
     Inputs:
         - **input_x** (Union[Tensor, Number, bool]) - The first input is a number, or a bool,
@@ -689,8 +693,8 @@ class CumProd(PrimitiveWithInfer):
             raise ValueError(f"For {self.name}, axis must be const.")
 
 
-class MatMul(PrimitiveWithInfer):
-    """
+class MatMul(PrimitiveWithCheck):
+    r"""
     Multiplies matrix `a` and matrix `b`.
 
     The rank of input tensors must equal to `2`.
@@ -730,10 +734,10 @@ class MatMul(PrimitiveWithInfer):
 
     def check_shape_size(self, x1, x2):
         if len(x1) != 2 or len(x2) != 2:
-            raise ValueError('P.MatMul inputs x1, x2 should has the same dimension size and '
+            raise ValueError('P.MatMul inputs x1, x2 should have the same dimension size and '
                              + f'equal to 2, while x1 size is ({len(x1)}) and x2 size is ({len(x2)}).')
 
-    def infer_shape(self, x1, x2):
+    def check_shape(self, x1, x2):
         self.check_shape_size(x1, x2)
         cls_name = self.name
         # expected dimension of x, y, x:[...,a,b] y:[..., c,d], the dim size should be the same except the last two
@@ -747,23 +751,18 @@ class MatMul(PrimitiveWithInfer):
         x2_last = x2[-2:]
         x1_col = x1_last[not self.transpose_a]
         x2_row = x2_last[self.transpose_b]
-        if x1_col != x2_row:
-            raise ValueError(f'For \'{cls_name}\' evaluator shapes of inputs can not do this operator,'
-                             + f' got {x1_col} and {x2_row}, with x1 shape {x1}(transpose_a={self.transpose_a})'
-                             + f', x2 shape {x2}(transpose_b={self.transpose_b}).')
+        if np.all(np.array(x1) != -1) and np.all(np.array(x2) != -1):
+            if x1_col != x2_row:
+                raise ValueError(f'For \'{cls_name}\' evaluator shapes of inputs can not do this operator,'
+                                 + f' got {x1_col} and {x2_row}, with x1 shape {x1}(transpose_a={self.transpose_a})'
+                                 + f', x2 shape {x2}(transpose_b={self.transpose_b}).')
         # set attribute
         self.add_prim_attr('transpose_x1', self.transpose_a)
         self.add_prim_attr('transpose_x2', self.transpose_b)
 
-        ret_dims = x1[: -2] + [x1_last[self.transpose_a], x2_last[not self.transpose_b]]
-        return ret_dims
-
-    def infer_dtype(self, x1, x2):
+    def check_dtype(self, x1, x2):
         args = {"x1": x1, "x2": x2}
         validator.check_tensors_dtypes_same_and_valid(args, mstype.float_type + mstype.int_type, self.name)
-        if x1.element_type() == mstype.int8:
-            return mstype.tensor_type(mstype.int32)
-        return x1
 
 
 class BatchMatMul(MatMul):
@@ -839,6 +838,10 @@ class BatchMatMul(MatMul):
 class CumSum(PrimitiveWithInfer):
     """
     Computes the cumulative sum of input tensor along axis.
+
+    .. math::
+
+        y_i = x_1 + x_2 + x_3 + ... + x_i
 
     Args:
         exclusive (bool): If true, perform exclusive mode. Default: False.
@@ -1258,6 +1261,10 @@ class Mul(_MathBinaryOp):
     When the inputs are one tensor and one scalar,
     the scalar could only be a constant.
 
+    .. math::
+
+        out_{i} = x_{i} * y_{i}
+
     Inputs:
         - **input_x** (Union[Tensor, Number, bool]) - The first input is a number or
           a bool or a tensor whose data type is number or bool.
@@ -1305,7 +1312,7 @@ class SquaredDifference(_MathBinaryOp):
         - **input_x** (Union[Tensor, Number, bool]) - The first input is a number, or a bool,
           or a tensor whose data type is float16, float32, int32 or bool.
         - **input_y** (Union[Tensor, Number, bool]) - The second input is a number, or a bool when the first input
-          is a tensor or a tensor whose data type isfloat16, float32, int32 or bool.
+          is a tensor or a tensor whose data type is float16, float32, int32 or bool.
 
     Outputs:
         Tensor, the shape is the same as the one after broadcasting,
@@ -1545,8 +1552,12 @@ class Pow(_MathBinaryOp):
 
 
 class Exp(PrimitiveWithInfer):
-    """
+    r"""
     Returns exponential of a tensor element-wise.
+
+    .. math::
+
+        out_i = e^{x_i}
 
     Inputs:
         - **input_x** (Tensor) - The input tensor. The data type mast be float16 or float32.
@@ -1587,8 +1598,12 @@ class Exp(PrimitiveWithInfer):
 
 
 class Expm1(PrimitiveWithInfer):
-    """
+    r"""
     Returns exponential then minus 1 of a tensor element-wise.
+
+    .. math::
+
+        out_i = e^{x_i} - 1
 
     Inputs:
         - **input_x** (Tensor) - The input tensor. With float16 or float32 data type.
@@ -1747,6 +1762,10 @@ class Erf(PrimitiveWithInfer):
     r"""
     Computes the Gauss error function of `input_x` element-wise.
 
+    .. math::
+
+        erf(x)=\frac{2} {\sqrt{\pi}} \int\limits_0^{x} e^{-t^{2}} dt
+
     Inputs:
         - **input_x** (Tensor) - The input tensor. The data type must be float16 or float32.
 
@@ -1780,6 +1799,10 @@ class Erf(PrimitiveWithInfer):
 class Erfc(PrimitiveWithInfer):
     r"""
     Computes the complementary error function of `input_x` element-wise.
+
+    .. math::
+
+        erfc(x) = 1 - \frac{2} {\sqrt{\pi}} \int\limits_0^{x} e^{-t^{2}} dt
 
     Inputs:
         - **input_x** (Tensor) - The input tensor. The data type must be float16 or float32.
@@ -1941,7 +1964,7 @@ class RealDiv(_MathBinaryOp):
 
 
 class Div(_MathBinaryOp):
-    """
+    r"""
     Computes the quotient of dividing the first input tensor by the second input tensor element-wise.
 
     Inputs of `input_x` and `input_y` comply with the implicit type conversion rules to make the data types consistent.
@@ -1950,6 +1973,10 @@ class Div(_MathBinaryOp):
     dtypes of them cannot be both bool, and the shapes of them could be broadcast.
     When the inputs are one tensor and one scalar,
     the scalar could only be a constant.
+
+    .. math::
+
+        out_{i} = \frac{x_i}{y_i}
 
     Inputs:
         - **input_x** (Union[Tensor, Number, bool]) - The first input is a number or
@@ -2032,6 +2059,58 @@ class DivNoNan(_MathBinaryOp):
         return None
 
 
+class MulNoNan(_MathBinaryOp):
+    r"""
+    Computes x * y element-wise. if y is zero, No matter what x is, it will return 0.
+
+    Inputs of `input_x` and `input_y` comply with the implicit type conversion rules to make the data types consistent.
+    The inputs must be two tensors or one tensor and one scalar.
+    When the inputs are two tensors, the shapes of them could be broadcast.
+    When the inputs are one tensor and one scalar, the scalar could only be a constant.
+
+    Note:
+        The shapes of X and y should be same or can be broadcasting.
+
+    Inputs:
+        - **input_x** (Union[Tensor]) - The first input is a tensor whose data type is number.
+        - **input_y** (Union[Tensor]) - The second input is a tensor whose data type is number.
+
+    Outputs:
+        Tensor, the shape is the same as the one after broadcasting,
+        and the data type is the one with higher precision or higher digits among the two inputs.
+
+    Supported Platforms:
+        ``Ascend``
+
+    Raise:
+        TypeError: If x or y is a bool tensor.
+
+    Examples:
+        >>> x = Tensor(np.array([[-1.0, 6.0, np.inf], [np.nan, -7.0, 4.0]]), ms.float32)
+        >>> y = Tensor(np.array([[-1.0, 4.0, 0], [0, -3.0, 1.0]]), ms.float32)
+        >>> mul_no_nan = ops.MulNoNan()
+        >>> output = mul_no_nan(x, y)
+        >>> print(output)
+        [[ 1. 24. 0.]
+        [ 0. 21. 4.]]
+    """
+
+    @prim_attr_register
+    def __init__(self):
+        """Initialize _BinaryOp"""
+        self.init_prim_io_names(inputs=['x', 'y'], outputs=['output'])
+
+    def infer_value(self, x, y):
+        if x is not None and y is not None:
+            x = x.asnumpy()
+            y = y.asnumpy()
+            with np.errstate(divide='ignore', invalid='ignore'):
+                out = np.multiply(x, y)
+                out[y == 0] = 0
+            return out
+        return None
+
+
 class FloorDiv(_MathBinaryOp):
     """
     Divides the first input tensor by the second input tensor element-wise and round down to the closest integer.
@@ -2054,7 +2133,7 @@ class FloorDiv(_MathBinaryOp):
         and the data type is the one with higher precision or higher digits among the two inputs.
 
     Supported Platforms:
-        ``Ascend`` ``GPU``
+        ``Ascend`` ``GPU`` ``CPU``
 
     Examples:
         >>> input_x = Tensor(np.array([2, 4, -1]), mindspore.int32)
@@ -2178,8 +2257,12 @@ class Mod(_MathBinaryOp):
 
 
 class Floor(PrimitiveWithInfer):
-    """
+    r"""
     Rounds a tensor down to the closest integer element-wise.
+
+    .. math::
+
+        out_i = \lfloor x_i \rfloor
 
     Inputs:
         - **input_x** (Tensor) - The input tensor. Its element data type must be float.
@@ -2245,8 +2328,12 @@ class FloorMod(_MathBinaryOp):
 
 
 class Ceil(PrimitiveWithInfer):
-    """
+    r"""
     Rounds a tensor up to the closest integer element-wise.
+
+    .. math::
+
+        out_i = \lceil x_i \rceil = \lfloor x_i \rfloor + 1
 
     Inputs:
         - **input_x** (Tensor) - The input tensor. It's element data type must be float16 or float32.
@@ -2357,14 +2444,19 @@ class Acosh(PrimitiveWithInfer):
     """
     Computes inverse hyperbolic cosine of the input element-wise.
 
+    .. math::
+
+        out_i = cosh^{-1}(input_i)
+
     Inputs:
-        - **input_x** (Tensor) - The shape of tensor is :math:`(x_1, x_2, ..., x_R)`.
+        - **input_x** (Tensor) - The shape of tensor is :math:`(x_1, x_2, ..., x_R)`. The data type should be one of
+          the following types: float16, float32.
 
     Outputs:
-        Tensor, has the same shape as `input_x`.
+        Tensor, has the same shape and type as `input_x`.
 
     Supported Platforms:
-        ``Ascend``
+        ``Ascend`` ``GPU``
 
     Examples:
         >>> acosh = ops.Acosh()
@@ -2420,17 +2512,22 @@ class Cosh(PrimitiveWithInfer):
 
 
 class Asinh(PrimitiveWithInfer):
-    """
+    r"""
     Computes inverse hyperbolic sine of the input element-wise.
 
+    .. math::
+
+        out_i = sinh^{-1}(input_i)
+
     Inputs:
-        - **input_x** (Tensor) - The shape of tensor is :math:`(x_1, x_2, ..., x_R)`.
+        - **input_x** (Tensor) - The shape of tensor is :math:`(x_1, x_2, ..., x_R)`. The data type should be one of
+          the following types: float16, float32.
 
     Outputs:
-        Tensor, has the same shape as `input_x`.
+        Tensor, has the same shape and type as `input_x`.
 
     Supported Platforms:
-        ``Ascend``
+        ``Ascend`` ``GPU``
 
     Examples:
         >>> asinh = ops.Asinh()
@@ -2514,6 +2611,7 @@ class Equal(_LogicBinaryOp):
           a tensor whose data type is number.
         - **input_y** (Union[Tensor, Number]) - The second input is a number
           when the first input is a tensor or a tensor whose data type is number.
+          The data type is the same as the first input.
 
     Outputs:
         Tensor, the shape is the same as the one after broadcasting,and the data type is bool.
@@ -2542,10 +2640,10 @@ class Equal(_LogicBinaryOp):
     def infer_value(self, x, y):
         if x is None or y is None:
             return None
-        if isinstance(x, MetaTensor):
-            x = x.to_tensor()
-        if isinstance(y, MetaTensor):
-            y = y.to_tensor()
+        if isinstance(x, Tensor) and x.has_init:
+            x = x.init_data()
+        if isinstance(y, Tensor) and y.has_init:
+            y = y.init_data()
         return Tensor(x.asnumpy() == y.asnumpy())
 
 
@@ -2852,7 +2950,7 @@ class LogicalNot(PrimitiveWithInfer):
         Tensor, the shape is the same as the `input_x`, and the dtype is bool.
 
     Supported Platforms:
-        ``Ascend`` ``GPU``
+        ``Ascend`` ``GPU`` ``CPU``
 
     Examples:
         >>> input_x = Tensor(np.array([True, False, True]), mindspore.bool_)
@@ -2895,7 +2993,7 @@ class LogicalAnd(_LogicBinaryOp):
         Tensor, the shape is the same as the one after broadcasting, and the data type is bool.
 
     Supported Platforms:
-        ``Ascend`` ``GPU``
+        ``Ascend`` ``GPU`` ``CPU``
 
     Examples:
         >>> input_x = Tensor(np.array([True, False, True]), mindspore.bool_)
@@ -2930,7 +3028,7 @@ class LogicalOr(_LogicBinaryOp):
         Tensor, the shape is the same as the one after broadcasting,and the data type is bool.
 
     Supported Platforms:
-        ``Ascend`` ``GPU``
+        ``Ascend`` ``GPU`` ``CPU``
 
     Examples:
         >>> input_x = Tensor(np.array([True, False, True]), mindspore.bool_)
@@ -3013,7 +3111,7 @@ class IsInf(PrimitiveWithInfer):
 
 class IsFinite(PrimitiveWithInfer):
     """
-    Deternubes which elements are finite for each position.
+    Determines which elements are finite for each position.
 
     Inputs:
         - **input_x** (Tensor) - The input tensor.
@@ -3137,6 +3235,8 @@ class NPUGetFloatStatus(PrimitiveWithInfer):
         >>> get_status = ops.NPUGetFloatStatus()
         >>> init = alloc_status()
         >>> get_status(init)
+        Tensor(shape=[8], dtype=Float32, value= [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  0.00000000e+00,
+          0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  0.00000000e+00])
         >>> print(init)
         [1. 1. 1. 1. 1. 1. 1. 1.]
     """
@@ -3184,6 +3284,8 @@ class NPUClearFloatStatus(PrimitiveWithInfer):
         >>> init = alloc_status()
         >>> flag = get_status(init)
         >>> clear_status(init)
+        Tensor(shape=[8], dtype=Float32, value= [ 0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  0.00000000e+00,
+          0.00000000e+00,  0.00000000e+00,  0.00000000e+00,  0.00000000e+00])
         >>> print(init)
         [1. 1. 1. 1. 1. 1. 1. 1.]
     """
@@ -3238,8 +3340,12 @@ class Cos(PrimitiveWithInfer):
 
 
 class ACos(PrimitiveWithInfer):
-    """
+    r"""
     Computes arccosine of input tensors element-wise.
+
+    .. math::
+
+        out_i = cos^{-1}(x_i)
 
     Inputs:
         - **input_x** (Tensor) - The shape of tensor is :math:`(x_1, x_2, ..., x_R)`.
@@ -3304,8 +3410,12 @@ class Sin(PrimitiveWithInfer):
 
 
 class Asin(PrimitiveWithInfer):
-    """
+    r"""
     Computes arcsine of input tensors element-wise.
+
+    .. math::
+
+        out_i = sin^{-1}(x_i)
 
     Inputs:
         - **input_x** (Tensor) - The shape of tensor is :math:`(x_1, x_2, ..., x_R)`.
@@ -3402,8 +3512,12 @@ class NMSWithMask(PrimitiveWithInfer):
 
 
 class Abs(PrimitiveWithInfer):
-    """
+    r"""
     Returns absolute value of a tensor element-wise.
+
+    .. math::
+
+        out_i = |x_i|
 
     Inputs:
         - **input_x** (Tensor) - The input tensor. The shape of tensor is :math:`(x_1, x_2, ..., x_R)`.
@@ -3551,26 +3665,28 @@ class Tan(PrimitiveWithInfer):
 
 
 class Atan(PrimitiveWithInfer):
-    """
+    r"""
     Computes the trigonometric inverse tangent of the input element-wise.
 
+    .. math::
+
+        out_i = tan^{-1}(x_i)
+
     Inputs:
-        - **input_x** (Tensor): The input tensor.
+        - **input_x** (Tensor): The input tensor. The data type should be one of the following types: float16, float32.
 
     Outputs:
         A Tensor, has the same type as the input.
 
     Supported Platforms:
-        ``Ascend``
+        ``Ascend`` ``GPU``
 
     Examples:
-        >>> input_x = Tensor(np.array([1.047, 0.785]), mindspore.float32)
-        >>> tan = ops.Tan()
-        >>> output_y = tan(input_x)
+        >>> input_x = Tensor(np.array([1.0, 0.0]), mindspore.float32)
         >>> atan = ops.Atan()
-        >>> output = atan(output_y)
+        >>> output = atan(input_x)
         >>> print(output)
-        [1.047     0.7850001]
+        [0.7853982 0.       ]
     """
 
     @prim_attr_register
@@ -4009,6 +4125,7 @@ class LinSpace(PrimitiveWithInfer):
                'value': None}
         return out
 
+
 class MatrixInverse(PrimitiveWithInfer):
     """
     Returns the inverse of the input matrix. If the matrix is irreversible, an error may be reported or an unknown
@@ -4025,13 +4142,15 @@ class MatrixInverse(PrimitiveWithInfer):
         Tensor, has the same type and shape as input `x`.
 
     Examples:
-        >>> x = Tensor(np.random.uniform(-2, 2, (2, 2, 2)), mstype.float32)
+        >>> mindspore.set_seed(1)
+        >>> x = Tensor(np.random.uniform(-2, 2, (2, 2, 2)), mindspore.float32)
         >>> matrix_inverse = P.MatrixInverse(adjoint=False)
-        >>> result = matrix_inverse(x)
-        [[[ 0.6804  0.8111]
-          [-2.3257  -1.0616]
-         [[-0.7074  -0.4963]
-          [0.1896  -1.5285]]]
+        >>> output = matrix_inverse(x)
+        >>> print(output)
+        [[[-0.39052644 -0.43528939]
+          [ 0.98761106 -0.16393748]]
+         [[ 0.52641493 -1.3895369 ]
+          [-1.0693996   1.2040523 ]]]
     """
 
     @prim_attr_register

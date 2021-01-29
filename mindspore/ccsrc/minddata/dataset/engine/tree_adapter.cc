@@ -18,11 +18,17 @@
 
 #include "minddata/dataset/core/client.h"
 #include "minddata/dataset/engine/ir/datasetops/root_node.h"
+#include "minddata/dataset/engine/opt/optional/tensor_op_fusion_pass.h"
 #include "minddata/dataset/engine/opt/pass.h"
 #include "minddata/dataset/engine/opt/post/auto_worker_pass.h"
+#ifdef ENABLE_PYTHON
+#include "minddata/dataset/engine/opt/post/generator_node_pass.h"
+#endif
+#include "minddata/dataset/engine/opt/pre/cache_transform_pass.h"
 #include "minddata/dataset/engine/opt/pre/cache_validation_pass.h"
 #include "minddata/dataset/engine/opt/pre/deep_copy_pass.h"
 #include "minddata/dataset/engine/opt/pre/epoch_ctrl_pass.h"
+#include "minddata/dataset/engine/opt/pre/getter_pass.h"
 #include "minddata/dataset/engine/opt/pre/input_validation_pass.h"
 #include "minddata/dataset/engine/opt/pre/node_removal_pass.h"
 
@@ -31,6 +37,11 @@ namespace dataset {
 
 TreeAdapter::TreeAdapter(UsageFlag usage) : usage_(usage), tree_state_(kCompileStateInit) {
   optimize_ = common::GetEnv("OPTIMIZE") == "true";
+
+  // Initialize profiling parameters
+  cur_batch_num_ = 0;
+  cur_connector_size_ = 0;
+  cur_connector_capacity_ = 0;
 }
 
 Status TreeAdapter::PrePass(std::shared_ptr<DatasetNode> ir) {
@@ -38,11 +49,12 @@ Status TreeAdapter::PrePass(std::shared_ptr<DatasetNode> ir) {
   std::vector<std::unique_ptr<IRPass>> actions;
 
   MS_LOG(INFO) << "Running pre pass loops.";
-  actions.push_back(std::make_unique<InputValidationPass>());
-  actions.push_back(std::make_unique<CacheValidationPass>());
-  actions.push_back(std::make_unique<NodeRemovalPass>());
-  actions.push_back(std::make_unique<EpochCtrlPass>());
-
+  actions.emplace_back(std::make_unique<InputValidationPass>());
+  actions.emplace_back(std::make_unique<CacheValidationPass>());
+  actions.emplace_back(std::make_unique<NodeRemovalPass>());
+  actions.emplace_back(std::make_unique<EpochCtrlPass>());
+  if (usage_ == kDeGetter) actions.emplace_back(std::make_unique<GetterPass>());
+  actions.emplace_back(std::make_unique<CacheTransformPass>());
   // Vector of flags for each action
   std::vector<bool> modified(actions.size(), false);
   // Apply pre-pass actions
@@ -59,16 +71,11 @@ Status TreeAdapter::Optimize(std::shared_ptr<DatasetNode> ir) {
   // Vector of optimizations
   std::vector<std::unique_ptr<IRNodePass>> optimizations;
   MS_LOG(INFO) << "Running optimization pass loops";
-
-  // We will gradually move TensorOpFusionPass from ExecutionTree::Optimize to here.
-
-  // Vector of flags for each optimization
-  std::vector<bool> modified(optimizations.size(), false);
+  optimizations.emplace_back(std::make_unique<TensorOpFusionPass>());
   // Apply optimization pass actions
   for (auto i = 0; i < optimizations.size(); i++) {
-    auto m = false;
-    RETURN_IF_NOT_OK(optimizations[i]->Run(ir, &m));
-    modified[i] = m;
+    bool modified = false;
+    RETURN_IF_NOT_OK(optimizations[i]->Run(ir, &modified));
   }
   MS_LOG(INFO) << "Optimization pass complete.";
   return Status::OK();
@@ -84,6 +91,9 @@ Status TreeAdapter::PostPass(std::shared_ptr<DatasetNode> ir) {
     // skip this for getter pass
     actions.emplace_back(std::make_unique<AutoWorkerPass>());
   }
+#ifdef ENABLE_PYTHON
+  actions.emplace_back(std::make_unique<GeneratorNodePass>());
+#endif
 
   // We will gradually move RepeatPass from ExecutionTree::PrepareTreePostAction to here.
 
@@ -98,7 +108,7 @@ Status TreeAdapter::PostPass(std::shared_ptr<DatasetNode> ir) {
   return Status::OK();
 }
 
-Status TreeAdapter::BuildExecutionTreeRecur(std::shared_ptr<DatasetNode> ir, std::shared_ptr<DatasetOp> *op) {
+Status TreeAdapter::BuildExecutionTreeRecur(std::shared_ptr<DatasetNode> ir, std::shared_ptr<DatasetOp> *const op) {
   // Build the DatasetOp ExecutionTree from the optimized IR tree
   std::vector<std::shared_ptr<DatasetOp>> ops;
   RETURN_IF_NOT_OK(ir->Build(&ops));
@@ -133,8 +143,6 @@ Status TreeAdapter::Build(std::shared_ptr<DatasetNode> root_ir, int32_t num_epoc
   RETURN_IF_NOT_OK(BuildExecutionTreeRecur(root_ir->Children()[0], &root_op));
   RETURN_IF_NOT_OK(tree_->AssignRoot(root_op));
 
-  if (pre_pass_override_) tree_->SetPrePassOverride(pre_pass_override_);
-
   // Note: We will gradually move the pre pass, optimizer pass, and post pass
   //       on ExecutionTree to perform on IR tree.
   // Prepare the tree
@@ -142,11 +150,6 @@ Status TreeAdapter::Build(std::shared_ptr<DatasetNode> root_ir, int32_t num_epoc
 
   // After the tree is prepared, the col_name_id_map can safely be obtained
   column_name_map_ = tree_->root()->column_name_id_map();
-
-  // Profiling parameters init
-  cur_batch_num_ = 0;
-  cur_connector_size_ = 0;
-  cur_connector_capacity_ = 0;
 
   return Status::OK();
 }
@@ -186,8 +189,10 @@ Status TreeAdapter::Compile(std::shared_ptr<DatasetNode> input_ir, int32_t num_e
 
   tree_state_ = kCompileStateOptimized;
   MS_LOG(INFO) << "Plan after optimization:" << '\n' << *root_ir << '\n';
+  // Remember the root node
+  root_ir_ = root_ir;
 
-  RETURN_IF_NOT_OK(Build(root_ir, num_epochs));
+  RETURN_IF_NOT_OK(Build(root_ir_, num_epochs));
   tree_state_ = kCompileStateReady;
 
   return Status::OK();

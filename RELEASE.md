@@ -1,3 +1,47 @@
+# MindSpore 1.1.1 Release Notes
+
+## MindSpore
+
+### API Change
+
+#### Backwards Incompatible Change
+
+##### Python API
+
+###### `ops.AvgPool`, `ops.MaxPool`, `ops.MaxPoolWithArgmax` change attr name from 'ksize', 'padding' to 'kernel_size', 'pad_mode' ([!11350](https://gitee.com/mindspore/mindspore/pulls/11350))
+
+Previously the kernel size and pad mode attrs of pooling ops are named "ksize" and "padding", which is a little puzzling and inconsistent with convolution ops. So they are rename to "kernel_size" and "pad_mode".
+
+<table>
+<tr>
+<td style="text-align:center"> 1.1.0 </td> <td style="text-align:center"> 1.1.1 </td>
+</tr>
+<tr>
+<td>
+
+```python
+>>> import mindspore.ops as ops
+>>>
+>>> avg_pool = ops.AvgPool(ksize=2, padding='same')
+>>> max_pool = ops.MaxPool(ksize=2, padding='same')
+>>> max_pool_with_argmax = ops.MaxPoolWithArgmax(ksize=2, padding='same')
+```
+
+</td>
+<td>
+
+```python
+>>> import mindspore.ops as ops
+>>>
+>>> avg_pool = ops.AvgPool(kernel_size=2, pad_mode='same')
+>>> max_pool = ops.MaxPool(kernel_size=2, pad_mode='same')
+>>> max_pool_with_argmax = ops.MaxPoolWithArgmax(kernel_size=2, pad_mode='same')
+```
+
+</td>
+</tr>
+</table>
+
 # MindSpore 1.1.0 Release Notes
 
 ## MindSpore
@@ -12,7 +56,7 @@
 - [STABLE] Openpose: proposes a bottom-up human attitude estimation algorithm using Part Affinity Fields on COCO2017 dataset.(Ascend)
 - [STABLE] CNN-CTC: proposes three major contributions to addresses scene text recognition (STR) on MJSynth and SynthText dataset.(Ascend)
 - [STABLE] CenterFace: a practical anchor-free face detection and alignment method for edge devices on WiderFace dataset.(Ascend)
-- [STABLE] ShuffleNetV2:  a much faster and more accurate netowrk than the previous networks on ImageNet 2012 dataset.(GPU)
+- [STABLE] ShuffleNetV2:  a much faster and more accurate network than the previous networks on ImageNet 2012 dataset.(GPU)
 - [STABLE] EfficientNet-B0: a new scaling method that uniformly scales all dimensions of depth/width/resolution using a simple yet highly effective compound coefficient on ImageNet 2012 dataset.(GPU)
 - [BETA] SSD-GhostNet: based on an Ghost module structure which generate more features from cheap operations on Oxford-IIIT Pet dataset.(Ascend)
 - [BETA] DS-CNN:  Depthwise separable convolutional neural network on Speech commands dataset.(Ascend)
@@ -80,6 +124,148 @@
 
 ##### Python API
 
+###### Delete shape and dtype of class Initializer ([!7373](https://gitee.com/mindspore/mindspore/pulls/7373/files))
+
+Delete shape and dtype attributes of Initializer class.
+
+###### Modify the return type of initializer ([!7373](https://gitee.com/mindspore/mindspore/pulls/7373/files))
+
+Previously, the return type of initializer function may be string, number, instance of class Tensor or subclass of class Initializer.
+
+After modification, initializer function will return instance of class MetaTensor, class Tensor or subclass of class Initializer.
+
+Noted that the MetaTensor is forbidden to initialize parameters, so we recommend that use str, number or subclass of Initializer for parameters initialization rather than the initializer functions.
+
+<table>
+<tr>
+<td style="text-align:center"> 1.0.1 </td> <td style="text-align:center"> 1.1.0 </td>
+</tr>
+<tr>
+<td>
+
+```python
+>>> import mindspore.nn as nn
+>>> from mindspore.common import initializer
+>>> from mindspore import dtype as mstype
+>>>
+>>> def conv3x3(in_channels, out_channels)
+>>>   weight = initializer('XavierUniform', shape=(3, 2, 32, 32), dtype=mstype.float32)
+>>>   return nn.Conv2d(in_channels, out_channels, weight_init=weight, has_bias=False, pad_mode="same")
+```
+
+</td>
+<td>
+
+```python
+>>> import mindspore.nn as nn
+>>> from mindspore.common.initializer import XavierUniform
+>>>
+>>> #1) using string
+>>> def conv3x3(in_channels, out_channels)
+>>>   return nn.Conv2d(in_channels, out_channels, weight_init='XavierUniform', has_bias=False, pad_mode="same")
+>>>
+>>> #2) using subclass of class Initializer
+>>> def conv3x3(in_channels, out_channels)
+>>>   return nn.Conv2d(in_channels, out_channels, weight_init=XavierUniform(), has_bias=False, pad_mode="same")
+```
+
+</td>
+</tr>
+</table>
+
+Advantages:
+After modification, we can use the same instance of Initializer to initialize parameters of different shapes, which was not allowed before.
+
+<table>
+<tr>
+<td style="text-align:center"> 1.0.1 </td> <td style="text-align:center"> 1.1.0 </td>
+</tr>
+<tr>
+<td>
+
+```python
+>>> import mindspore.nn as nn
+>>> from mindspore.common import initializer
+>>> from mindspore.common.initializer import XavierUniform
+>>>
+>>> weight_init_1 = XavierUniform(gain=1.1)
+>>> conv1 = nn.Conv2d(3, 6, weight_init=weight_init_1)
+>>> weight_init_2 = XavierUniform(gain=1.1)
+>>> conv2 = nn.Conv2d(6, 10, weight_init=weight_init_2)
+```
+
+</td>
+<td>
+
+```python
+>>> import mindspore.nn as nn
+>>> from mindspore.common import initializer
+>>> from mindspore.common.initializer import XavierUniform
+>>>
+>>> weight_init = XavierUniform(gain=1.1)
+>>> conv1 = nn.Conv2d(3, 6, weight_init=weight_init)
+>>> conv2 = nn.Conv2d(6, 10, weight_init=weight_init)
+```
+
+</td>
+</tr>
+</table>
+
+###### Modify get_seed function ([!7429](https://gitee.com/mindspore/mindspore/pulls/7429/files))
+
+Modify get_seed function implementation
+
+Previously, if seed is not set, the value of seed is default, parameters initialized by the normal function are the same every time.
+
+After modification, if seed is not set, the value of seed is generated randomly, the initialized parameters change according to the random seed.
+
+If you want to fix the initial value of parameters, we suggest to set seed.
+
+```python
+>>> from mindspore.common import set_seed
+>>> set_seed(1)
+```
+
+###### `nn.LinSpace` ([!9494](https://gitee.com/mindspore/mindspore/pulls/9494)) has been removed and modify `ops.LinSpace` ([!8920](https://gitee.com/mindspore/mindspore/pulls/8920))
+
+The `nn.LinSpace` interface only support passing the value by args previously. For the convenience, we provided enhancive `ops.LinSpace` interface, which support passing the value by the inputs at the latest version. So there is no need for `nn.LinSpace`.
+
+<table>
+<tr>
+<td style="text-align:center"> 1.0.1 </td> <td style="text-align:center"> 1.1.0 </td>
+</tr>
+<tr>
+<td>
+
+```python
+>>> from mindspore import nn
+>>>
+>>> start = 1
+>>> stop = 10
+>>> num = 5
+>>> linspace = nn.LinSpace(start, stop, num)
+>>> output = linspace()
+```
+
+</td>
+<td>
+
+```python
+>>> import mindspore
+>>> from mindspore import Tensor
+>>> from mindspore import ops
+>>>
+>>> linspace = ops.LinSpace()
+>>> start = Tensor(1, mindspore.float32)
+>>> stop = Tensor(10, mindspore.float32)
+>>> num = 5
+>>> output = linspace(start, stop, num)
+```
+
+</td>
+</tr>
+</table>
+
 ###### Parts of `Optimizer` add target interface ([!6760](https://gitee.com/mindspore/mindspore/pulls/6760/files))
 
 The usage of the sparse optimizer is changed.
@@ -120,7 +306,7 @@ The following optimizers add the target interface:  Adam, FTRL, LazyAdam, Proxim
 </tr>
 </table>
 
-###### `export` Modify the input parameters and export's file name ([!7385](https://gitee.com/mind_spore/dashboard/projects/mindspore/mindspore/pulls/7385?tab=diffs)， [!9057](https://gitee.com/mindspore/mindspore/pulls/9057/files))
+###### `export` Modify the input parameters and export's file name ([!7385](https://gitee.com/mindspore/mindspore/pulls/7385)， [!9057](https://gitee.com/mindspore/mindspore/pulls/9057/files))
 
 Export the MindSpore prediction model to a file in the specified format.
 
@@ -227,7 +413,7 @@ However, from a user's perspective, tensor.size and tensor.ndim (methods -> prop
 </tr>
 </table>
 
-###### `EmbeddingLookup` add a config in the interface: sparse ([!8202](https://gitee.com/mind_spore/dashboard/projects/mindspore/mindspore/pulls/8202?tab=diffs))
+###### `EmbeddingLookup` add a config in the interface: sparse ([!8202](https://gitee.com/mindspore/mindspore/pulls/8202))
 
 sparse (bool): Using sparse mode. When 'target' is set to 'CPU', 'sparse' has to be true. Default: True.
 
@@ -329,7 +515,7 @@ dtype is removed from GumbelCDF and is no longer an argument of the class.
 
 ###### `nn.layer.combined.Conv2dBnAct`, `nn.layer.combined.DenseBnAct` move from nn.layer.quant to nn.layer.combined ([!8187](https://gitee.com/mindspore/mindspore/pulls/8187))
 
-Previously Conv2dBnAct and DenseBnAct are in nn.layer.quant, since they are not quant cells, now they are moved to nn.layer.combined. If you import Conv2dBnAct, DenseBnAct from mindspore.nn, then your code dosen't need any change.
+Previously Conv2dBnAct and DenseBnAct are in nn.layer.quant, since they are not quant cells, now they are moved to nn.layer.combined. If you import Conv2dBnAct, DenseBnAct from mindspore.nn, then your code doesn't need any change.
 
 <table>
 <tr>
@@ -383,7 +569,9 @@ In Ascend platform, if group > 1, the weight shape of Conv2D change from [in_cha
 
 ## MindSpore Lite
 
-### Converter and runtime
+### Major Features and Improvements
+
+#### Converter and runtime
 
 1. Support dynamic shape in MindSpore Lite Converter.
 2. Optimize sub-graph mechanism by dynamically splitting the entire graph into multiple subgraphs based on the operator supported, backend hardware and user configuration.
@@ -398,23 +586,23 @@ In Ascend platform, if group > 1, the weight shape of Conv2D change from [in_cha
 11. Support NPU backend on HUAWEI Kirin SoC.[BETA]
 12. Merge timeprofiler into benchmark
 
-### ARM backend optimization
+#### CPU backend optimization
 
 1. Add 50+ new operators, including new Op type(like Adder, Gru).
 2. Enhanced performance on armv8.2 supported platform. For example, utilizing sdot instruction more efficiently.
 3. Optimize all operators(fp32, fp16, int8) by implementing multi-thread, SIMD tech as much as possible. Model inference time can reduce at least 20% after these optimizations.
 4. Extending to support operators for x86_64 platform based on SSE/AVX instruction set.
 
-### OpenCL backend
+#### OpenCL backend
 
 1. Add new ops: add 10+ ops, total 58 ops;
 2. Performance optimization: by memory layout optimize, Winograd Convolution select strategyoptimize, SIMT local size optimize, local cache optimize,  GPU performance improvement up to 20+% vs MSLITE Version1.0
 3. Add Online Graph optimzation: by fusion Convolution/Matmul/Fullconnection and add/mul/pad/reshape, improve performance up to 50+% for some networks;
 4. Add auto tuning: by online tuning in the graph compilation phase, optimize performance up to 10%;
 5. Add weight quant: support weight quant
-6. Add opencl kernel binary cache: improve Initilization time .
+6. Add opencl kernel binary cache: improve Initialization time .
 
-### Post quantization
+#### Post quantization
 
 MindSpore Lite supports both weight quantization and full quantization. Currently, Weights can be quantized into 1 ~ 16 bits according to user configuration. In internal testing, quantization of networks, such as classification, detection, segmentation and transformer are well supported. To ensure high accuracy of quantized models, MindSpore Lite uses a pipeline quantization method. In the first phase, the weight and activation value are quantized using linear quantization methods, such as MIN-MAX. In the second phase, the quantization error is analyzed, and uses statistical methods to compensate loss caused by fp32 quantization to a fixed point such as Int8 to quantized models. The features of Post-training quantization are:
 
@@ -433,7 +621,7 @@ MindSpore Lite supports both weight quantization and full quantization. Currentl
 
 The above table uses the mobilenet_v2 model from TF official website. Using MindSpore Lite quantization, the precision of A8W8 (8-bit activation value quantization and 8-bit weight quantization) decreases from 0.82% to 0.4% after accuracy loss compensation, for 7-bit quantization, the precision loss is still no more than 1%.
 
-### Training on Device
+#### Training on Device
 
 Within MindSpore 1.1 release, the MindSpore Lite provides the following Training-on-Device (ToD) capabilities:
 
@@ -459,7 +647,7 @@ The MindSpore Lite ToD framework is already in use in the newest Huawei Smart TV
 
 ##### Java API
 
-- [Add] Implament JNI layer and add Java api for CPU and GPU backend
+- [Add] Implement JNI layer and add Java api for CPU and GPU backend
 
 #### Deprecations
 
@@ -684,7 +872,7 @@ Contributions of any kind are welcome!
 - Python API
     - improve interface '__bool__' for tensor([!4000](https://gitee.com/mindspore/mindspore/pulls/4000))
     - fix GPU-ResizeNearestNeighbor([!3760](https://gitee.com/mindspore/mindspore/pulls/3760))
-    - fix topK multi dimention grad func([!3711](https://gitee.com/mindspore/mindspore/pulls/3711))
+    - fix topK multi dimension grad func([!3711](https://gitee.com/mindspore/mindspore/pulls/3711))
     - fix scatterop error msg([!3699](https://gitee.com/mindspore/mindspore/pulls/3699))
     - fix bug of cast dtype when using mix_presion in pynative mode([!3730](https://gitee.com/mindspore/mindspore/pulls/3730))
 - Executor
@@ -771,7 +959,7 @@ Contributions of any kind are welcome!
     - Fixing type check mistakes of InplaceAdd and Inplace Sub ops([!2744](https://gitee.com/mindspore/mindspore/pulls/2744]))
     - Change order param only equal to group param([!2748](https://gitee.com/mindspore/mindspore/pulls/2748))
 - Executor
-    - The performance of graph whith control flow is optimized([!2931](https://gitee.com/mindspore/mindspore/pulls/2931))
+    - The performance of graph with control flow is optimized([!2931](https://gitee.com/mindspore/mindspore/pulls/2931))
     - Fix bug of wrong number of tuple layers([!3390](https://gitee.com/mindspore/mindspore/pulls/3390))
     - Fix cpu multi graph memory exception([!3631](https://gitee.com/mindspore/mindspore/pulls/3631))
     - Enable data sync when calling operator without defining a cell([!3081](https://gitee.com/mindspore/mindspore/pulls/3081))
@@ -876,7 +1064,7 @@ Contributions of any kind are welcome!
     - Fix bug of list cannot be used as input in pynative mode([!1765](https://gitee.com/mindspore/mindspore/pulls/1765))
     - Fix bug of kernel select ([!2103](https://gitee.com/mindspore/mindspore/pulls/2103))
     - Fix bug of pattern matching for batchnorm fusion in the case of auto mix precision.([!1851](https://gitee.com/mindspore/mindspore/pulls/1851))
-    - Fix bug of generate hccl's kernel info.([!2393](https://gitee.com/mindspore/mindspore/mindspore/pulls/2393))
+    - Fix bug of generate hccl's kernel info.([!2393](https://gitee.com/mindspore/mindspore/pulls/2393))
 - GPU platform
     - Fix bug of summary feature invalid([!2173](https://gitee.com/mindspore/mindspore/pulls/2173))
 - Data processing
@@ -966,7 +1154,7 @@ Contributions of any kind are welcome!
     - Fix dropout，topK and addn errors in PyNative mode ([!1285](https://gitee.com/mindspore/mindspore/pulls/1285), [!1138](https://gitee.com/mindspore/mindspore/pulls/1138), [!1033](https://gitee.com/mindspore/mindspore/pulls/1033)).
     - Fix memory leaks after execution in PyNatvie mode ([!1201](https://gitee.com/mindspore/mindspore/pulls/1201)).
     - Fix HCCL failure in some special scenes ([!1204](https://gitee.com/mindspore/mindspore/pulls/1204), [!1252](https://gitee.com/mindspore/mindspore/pulls/1252)).
-    - Fix SSD network when Select failed, cann't find kernel info([!1449](https://gitee.com/mindspore/mindspore/pulls/1449)).
+    - Fix SSD network when Select failed, can't find kernel info([!1449](https://gitee.com/mindspore/mindspore/pulls/1449)).
     - Fix Topk operator selection strategy bug between aicore and aicpu([!1367](https://gitee.com/mindspore/mindspore/pulls/1367)).
     - Fix input memory size of 'assign' op unequal in control sink mode when assigning a data from one child graph to another child graph([!802](https://gitee.com/mindspore/mindspore/pulls/802)).
     - Fix allreduce ir inconsistency([!989](https://gitee.com/mindspore/mindspore/pulls/989)).

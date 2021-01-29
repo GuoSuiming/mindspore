@@ -288,14 +288,17 @@ def check_sampler_shuffle_shard_options(param_dict):
     """
     shuffle, sampler = param_dict.get('shuffle'), param_dict.get('sampler')
     num_shards, shard_id = param_dict.get('num_shards'), param_dict.get('shard_id')
+    num_samples = param_dict.get('num_samples')
 
     type_check(sampler, (type(None), samplers.BuiltinSampler, samplers.Sampler), "sampler")
 
     if sampler is not None:
         if shuffle is not None:
             raise RuntimeError("sampler and shuffle cannot be specified at the same time.")
-        if num_shards is not None:
+        if num_shards is not None or shard_id is not None:
             raise RuntimeError("sampler and sharding cannot be specified at the same time.")
+        if num_samples is not None:
+            raise RuntimeError("sampler and num_samples cannot be specified at the same time.")
 
     if num_shards is not None:
         check_pos_int32(num_shards)
@@ -381,5 +384,9 @@ def check_gnn_list_or_ndarray(param, param_name):
 
 def check_tensor_op(param, param_name):
     """check whether param is a tensor op or a callable Python function"""
-    if not isinstance(param, cde.TensorOp) and not callable(param):
-        raise TypeError("{0} is neither a c_transform op (TensorOp) nor a callable pyfunc.".format(param_name))
+    if not isinstance(param, cde.TensorOp) and not callable(param) and not getattr(param, 'parse', None):
+        raise TypeError("{0} is neither a c_transform op (TensorOperation) nor a callable pyfunc.".format(param_name))
+
+
+def replace_none(value, default):
+    return value if value is not None else default

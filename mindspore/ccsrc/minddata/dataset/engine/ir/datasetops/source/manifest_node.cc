@@ -40,7 +40,7 @@ ManifestNode::ManifestNode(const std::string &dataset_file, const std::string &u
       sampler_(sampler) {}
 
 std::shared_ptr<DatasetNode> ManifestNode::Copy() {
-  std::shared_ptr<SamplerObj> sampler = (sampler_ == nullptr) ? nullptr : sampler_->Copy();
+  std::shared_ptr<SamplerObj> sampler = (sampler_ == nullptr) ? nullptr : sampler_->SamplerCopy();
   auto node = std::make_shared<ManifestNode>(dataset_file_, usage_, sampler, class_index_, decode_, cache_);
   return node;
 }
@@ -82,7 +82,7 @@ Status ManifestNode::ValidateParams() {
   return Status::OK();
 }
 
-Status ManifestNode::Build(std::vector<std::shared_ptr<DatasetOp>> *node_ops) {
+Status ManifestNode::Build(std::vector<std::shared_ptr<DatasetOp>> *const node_ops) {
   // Do internal Schema generation.
   auto schema = std::make_unique<DataSchema>();
   RETURN_IF_NOT_OK(schema->AddColumn(ColDescriptor("image", DataType(DataType::DE_UINT8), TensorImpl::kCv, 1)));
@@ -93,8 +93,7 @@ Status ManifestNode::Build(std::vector<std::shared_ptr<DatasetOp>> *node_ops) {
   std::shared_ptr<ManifestOp> manifest_op;
   manifest_op =
     std::make_shared<ManifestOp>(num_workers_, rows_per_buffer_, dataset_file_, connector_que_size_, decode_,
-                                 class_index_, std::move(schema), std::move(sampler_->Build()), usage_);
-  RETURN_IF_NOT_OK(AddCacheOp(node_ops));
+                                 class_index_, std::move(schema), std::move(sampler_->SamplerBuild()), usage_);
 
   node_ops->push_back(manifest_op);
 
@@ -118,11 +117,29 @@ Status ManifestNode::GetDatasetSize(const std::shared_ptr<DatasetSizeGetter> &si
   int64_t num_rows, sample_size;
   int64_t num_classes;  // dummy variable
   RETURN_IF_NOT_OK(ManifestOp::CountTotalRows(dataset_file_, class_index_, usage_, &num_rows, &num_classes));
-  sample_size = sampler_->Build()->CalculateNumSamples(num_rows);
+  sample_size = sampler_->SamplerBuild()->CalculateNumSamples(num_rows);
   *dataset_size = sample_size;
   dataset_size_ = *dataset_size;
   return Status::OK();
 }
 
+Status ManifestNode::to_json(nlohmann::json *out_json) {
+  nlohmann::json args, sampler_args;
+  RETURN_IF_NOT_OK(sampler_->to_json(&sampler_args));
+  args["sampler"] = sampler_args;
+  args["num_parallel_workers"] = num_workers_;
+  args["dataset_file"] = dataset_file_;
+  args["usage"] = usage_;
+  args["class_indexing"] = class_index_;
+  args["decode"] = decode_;
+
+  if (cache_ != nullptr) {
+    nlohmann::json cache_args;
+    RETURN_IF_NOT_OK(cache_->to_json(&cache_args));
+    args["cache"] = cache_args;
+  }
+  *out_json = args;
+  return Status::OK();
+}
 }  // namespace dataset
 }  // namespace mindspore

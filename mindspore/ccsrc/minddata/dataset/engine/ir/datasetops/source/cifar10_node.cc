@@ -33,7 +33,7 @@ Cifar10Node::Cifar10Node(const std::string &dataset_dir, const std::string &usag
     : MappableSourceNode(std::move(cache)), dataset_dir_(dataset_dir), usage_(usage), sampler_(sampler) {}
 
 std::shared_ptr<DatasetNode> Cifar10Node::Copy() {
-  std::shared_ptr<SamplerObj> sampler = (sampler_ == nullptr) ? nullptr : sampler_->Copy();
+  std::shared_ptr<SamplerObj> sampler = (sampler_ == nullptr) ? nullptr : sampler_->SamplerCopy();
   auto node = std::make_shared<Cifar10Node>(dataset_dir_, usage_, sampler, cache_);
   return node;
 }
@@ -54,7 +54,7 @@ Status Cifar10Node::ValidateParams() {
 }
 
 // Function to build CifarOp for Cifar10
-Status Cifar10Node::Build(std::vector<std::shared_ptr<DatasetOp>> *node_ops) {
+Status Cifar10Node::Build(std::vector<std::shared_ptr<DatasetOp>> *const node_ops) {
   // Do internal Schema generation.
   auto schema = std::make_unique<DataSchema>();
   RETURN_IF_NOT_OK(schema->AddColumn(ColDescriptor("image", DataType(DataType::DE_UINT8), TensorImpl::kCv, 1)));
@@ -62,11 +62,9 @@ Status Cifar10Node::Build(std::vector<std::shared_ptr<DatasetOp>> *node_ops) {
   RETURN_IF_NOT_OK(
     schema->AddColumn(ColDescriptor("label", DataType(DataType::DE_UINT32), TensorImpl::kFlexible, 0, &scalar)));
 
-  RETURN_IF_NOT_OK(AddCacheOp(node_ops));
-
   node_ops->push_back(std::make_shared<CifarOp>(CifarOp::CifarType::kCifar10, usage_, num_workers_, rows_per_buffer_,
                                                 dataset_dir_, connector_que_size_, std::move(schema),
-                                                std::move(sampler_->Build())));
+                                                std::move(sampler_->SamplerBuild())));
 
   return Status::OK();
 }
@@ -87,11 +85,26 @@ Status Cifar10Node::GetDatasetSize(const std::shared_ptr<DatasetSizeGetter> &siz
   }
   int64_t num_rows, sample_size;
   RETURN_IF_NOT_OK(CifarOp::CountTotalRows(dataset_dir_, usage_, true, &num_rows));
-  sample_size = sampler_->Build()->CalculateNumSamples(num_rows);
+  sample_size = sampler_->SamplerBuild()->CalculateNumSamples(num_rows);
   *dataset_size = sample_size;
   dataset_size_ = *dataset_size;
   return Status::OK();
 }
 
+Status Cifar10Node::to_json(nlohmann::json *out_json) {
+  nlohmann::json args, sampler_args;
+  RETURN_IF_NOT_OK(sampler_->to_json(&sampler_args));
+  args["sampler"] = sampler_args;
+  args["num_parallel_workers"] = num_workers_;
+  args["dataset_dir"] = dataset_dir_;
+  args["usage"] = usage_;
+  if (cache_ != nullptr) {
+    nlohmann::json cache_args;
+    RETURN_IF_NOT_OK(cache_->to_json(&cache_args));
+    args["cache"] = cache_args;
+  }
+  *out_json = args;
+  return Status::OK();
+}
 }  // namespace dataset
 }  // namespace mindspore

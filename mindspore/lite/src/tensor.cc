@@ -282,13 +282,11 @@ int Tensor::set_root_tensor(Tensor *tensor) {
     return RET_OK;
   }
   if (this->root_tensor_ == nullptr) {
-    MS_LOG(ERROR) << "root tensor is nullptr";
-    return RET_NULL_PTR;
+    return RET_OK;
   }
   this->shape_ = this->root_tensor_->shape_;
   this->format_ = this->root_tensor_->format_;
   this->data_type_ = this->root_tensor_->data_type_;
-  this->allocator_ = this->root_tensor_->allocator_;
   this->category_ = this->root_tensor_->category_;
   this->quant_params_ = this->root_tensor_->quant_params_;
   this->quant_clusters_ = this->root_tensor_->quant_clusters_;
@@ -367,6 +365,10 @@ std::vector<QuantArg> Tensor::quant_params() const { return this->quant_params_;
 std::vector<float> Tensor::quant_clusters() const { return this->quant_clusters_; }
 
 void Tensor::set_quant_clusters(const std::vector<float> &clusters) { this->quant_clusters_ = clusters; }
+
+bool Tensor::IsEnableHuffmanCode() const { return enableHuffmanCode; }
+
+void Tensor::SetEnableHuffmanCode(bool enableHuffmanCode) { this->enableHuffmanCode = enableHuffmanCode; }
 
 std::vector<tensor::MSTensor *> TensorVectorCast(const std::vector<Tensor *> &src) {
   std::vector<tensor::MSTensor *> target(src.size());

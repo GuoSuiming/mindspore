@@ -219,6 +219,7 @@ Status ManifestOp::LoadTensorRow(row_id_type row_id, const std::pair<std::string
     }
   }
   (*trow) = TensorRow(row_id, {std::move(image), std::move(label)});
+  trow->setPath({data.first, file_});
   return Status::OK();
 }
 
@@ -436,7 +437,7 @@ Status ManifestOp::GetClassIndexing(const std::string &file, const py::dict &dic
 #endif
 
 // Visitor accept method for NodePass
-Status ManifestOp::Accept(NodePass *p, bool *modified) {
+Status ManifestOp::Accept(NodePass *p, bool *const modified) {
   // Downcast shared pointer then call visitor
   return p->RunOnNode(shared_from_base<ManifestOp>(), modified);
 }

@@ -39,7 +39,7 @@ std::shared_ptr<DatasetNode> TakeNode::Copy() {
 void TakeNode::Print(std::ostream &out) const { out << Name() + "(num_rows:" + std::to_string(take_count_) + ")"; }
 
 // Function to build the TakeOp
-Status TakeNode::Build(std::vector<std::shared_ptr<DatasetOp>> *node_ops) {
+Status TakeNode::Build(std::vector<std::shared_ptr<DatasetOp>> *const node_ops) {
   node_ops->push_back(std::make_shared<TakeOp>(take_count_, connector_que_size_));
   return Status::OK();
 }
@@ -71,15 +71,22 @@ Status TakeNode::GetDatasetSize(const std::shared_ptr<DatasetSizeGetter> &size_g
 }
 
 // Visitor accepting method for IRNodePass
-Status TakeNode::Accept(IRNodePass *p, bool *modified) {
+Status TakeNode::Accept(IRNodePass *const p, bool *const modified) {
   // Downcast shared pointer then call visitor
   return p->Visit(shared_from_base<TakeNode>(), modified);
 }
 
 // Visitor accepting method for IRNodePass
-Status TakeNode::AcceptAfter(IRNodePass *p, bool *modified) {
+Status TakeNode::AcceptAfter(IRNodePass *const p, bool *const modified) {
   // Downcast shared pointer then call visitor
   return p->VisitAfter(shared_from_base<TakeNode>(), modified);
+}
+
+Status TakeNode::to_json(nlohmann::json *out_json) {
+  nlohmann::json args;
+  args["count"] = take_count_;
+  *out_json = args;
+  return Status::OK();
 }
 }  // namespace dataset
 }  // namespace mindspore

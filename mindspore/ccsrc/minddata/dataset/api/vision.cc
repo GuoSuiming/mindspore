@@ -75,6 +75,7 @@
 #include "minddata/dataset/kernels/image/swap_red_blue_op.h"
 #include "minddata/dataset/kernels/image/uniform_aug_op.h"
 #endif
+#include "minddata/dataset/kernels/image/rotate_op.h"
 
 namespace mindspore {
 namespace dataset {
@@ -525,6 +526,11 @@ std::shared_ptr<TensorOp> CenterCropOperation::Build() {
   return tensor_op;
 }
 
+Status CenterCropOperation::to_json(nlohmann::json *out_json) {
+  (*out_json)["size"] = size_;
+  return Status::OK();
+}
+
 // CropOperation.
 CropOperation::CropOperation(std::vector<int32_t> coordinates, std::vector<int32_t> size)
     : coordinates_(coordinates), size_(size) {}
@@ -636,6 +642,11 @@ DecodeOperation::DecodeOperation(bool rgb) : rgb_(rgb) {}
 Status DecodeOperation::ValidateParams() { return Status::OK(); }
 
 std::shared_ptr<TensorOp> DecodeOperation::Build() { return std::make_shared<DecodeOp>(rgb_); }
+
+Status DecodeOperation::to_json(nlohmann::json *out_json) {
+  (*out_json)["rgb"] = rgb_;
+  return Status::OK();
+}
 
 // EqualizeOperation
 Status EqualizeOperation::ValidateParams() { return Status::OK(); }
@@ -800,6 +811,14 @@ std::shared_ptr<TensorOp> NormalizeOperation::Build() {
   return std::make_shared<NormalizeOp>(mean_[0], mean_[1], mean_[2], std_[0], std_[1], std_[2]);
 }
 
+Status NormalizeOperation::to_json(nlohmann::json *out_json) {
+  nlohmann::json args;
+  args["mean"] = mean_;
+  args["std"] = std_;
+  *out_json = args;
+  return Status::OK();
+}
+
 #ifndef ENABLE_ANDROID
 // NormalizePadOperation
 NormalizePadOperation::NormalizePadOperation(const std::vector<float> &mean, const std::vector<float> &std,
@@ -890,6 +909,15 @@ std::shared_ptr<TensorOp> PadOperation::Build() {
   std::shared_ptr<PadOp> tensor_op =
     std::make_shared<PadOp>(pad_top, pad_bottom, pad_left, pad_right, padding_mode_, fill_r, fill_g, fill_b);
   return tensor_op;
+}
+
+Status PadOperation::to_json(nlohmann::json *out_json) {
+  nlohmann::json args;
+  args["padding"] = padding_;
+  args["fill_value"] = fill_value_;
+  args["padding_mode"] = padding_mode_;
+  *out_json = args;
+  return Status::OK();
 }
 
 // RandomAffineOperation
@@ -1187,6 +1215,16 @@ std::shared_ptr<TensorOp> RandomColorAdjustOperation::Build() {
   return tensor_op;
 }
 
+Status RandomColorAdjustOperation::to_json(nlohmann::json *out_json) {
+  nlohmann::json args;
+  args["brightness"] = brightness_;
+  args["contrast"] = contrast_;
+  args["saturation"] = saturation_;
+  args["hue"] = hue_;
+  *out_json = args;
+  return Status::OK();
+}
+
 // RandomCropOperation
 RandomCropOperation::RandomCropOperation(std::vector<int32_t> size, std::vector<int32_t> padding, bool pad_if_needed,
                                          std::vector<uint8_t> fill_value, BorderType padding_mode)
@@ -1260,76 +1298,22 @@ std::shared_ptr<TensorOp> RandomCropOperation::Build() {
   return tensor_op;
 }
 
+Status RandomCropOperation::to_json(nlohmann::json *out_json) {
+  nlohmann::json args;
+  args["size"] = size_;
+  args["padding"] = padding_;
+  args["pad_if_needed"] = pad_if_needed_;
+  args["fill_value"] = fill_value_;
+  args["padding_mode"] = padding_mode_;
+  *out_json = args;
+  return Status::OK();
+}
+
 // RandomCropDecodeResizeOperation
 RandomCropDecodeResizeOperation::RandomCropDecodeResizeOperation(std::vector<int32_t> size, std::vector<float> scale,
                                                                  std::vector<float> ratio,
                                                                  InterpolationMode interpolation, int32_t max_attempts)
-    : TensorOperation(true),
-      size_(size),
-      scale_(scale),
-      ratio_(ratio),
-      interpolation_(interpolation),
-      max_attempts_(max_attempts) {}
-
-Status RandomCropDecodeResizeOperation::ValidateParams() {
-  // size
-  if (size_.empty() || size_.size() > 2) {
-    std::string err_msg = "RandomCropDecodeResize: size vector has incorrect size: " + std::to_string(size_.size());
-    MS_LOG(ERROR) << err_msg;
-    RETURN_STATUS_SYNTAX_ERROR(err_msg);
-  }
-  RETURN_IF_NOT_OK(ValidateVectorPositive("RandomCropDecodeResize", size_));
-  // rescale
-  if (scale_.empty() || scale_.size() != 2) {
-    std::string err_msg = "RandomCropDecodeResize: scale vector has incorrect size: " + std::to_string(scale_.size());
-    MS_LOG(ERROR) << err_msg;
-    RETURN_STATUS_SYNTAX_ERROR(err_msg);
-  }
-  if (scale_[0] < 0) {
-    std::string err_msg = "RandomCropDecodeResize: invalid scale, min scale must be greater than or equal to 0, got: " +
-                          std::to_string(scale_[0]);
-    MS_LOG(ERROR) << err_msg;
-    RETURN_STATUS_SYNTAX_ERROR(err_msg);
-  }
-  if (scale_[1] <= 0) {
-    std::string err_msg =
-      "RandomCropDecodeResize: invalid scale, max scale must be greater than 0, got: " + std::to_string(scale_[1]);
-    MS_LOG(ERROR) << err_msg;
-    RETURN_STATUS_SYNTAX_ERROR(err_msg);
-  }
-  if (scale_[0] > scale_[1]) {
-    std::string err_msg = "RandomCropDecodeResize: scale should be in (min,max) format. Got (max,min).";
-    MS_LOG(ERROR) << err_msg;
-    RETURN_STATUS_SYNTAX_ERROR(err_msg);
-  }
-  // ratio
-  if (ratio_.empty() || ratio_.size() != 2) {
-    std::string err_msg = "RandomCropDecodeResize: ratio vector has incorrect size: " + std::to_string(ratio_.size());
-    MS_LOG(ERROR) << err_msg;
-    RETURN_STATUS_SYNTAX_ERROR(err_msg);
-  }
-  for (int32_t i = 0; i < ratio_.size(); ++i) {
-    if (ratio_[i] <= 0) {
-      std::string err_msg =
-        "RandomCropDecodeResize: invalid ratio, ratio must be greater than 0, got: " + std::to_string(ratio_[i]);
-      MS_LOG(ERROR) << err_msg;
-      RETURN_STATUS_SYNTAX_ERROR(err_msg);
-    }
-  }
-  if (ratio_[0] > ratio_[1]) {
-    std::string err_msg = "RandomCropDecodeResize: ratio should be in (min,max) format. Got (max,min).";
-    MS_LOG(ERROR) << err_msg;
-    RETURN_STATUS_SYNTAX_ERROR(err_msg);
-  }
-  // max_attempts
-  if (max_attempts_ < 1) {
-    std::string err_msg =
-      "RandomCropDecodeResize: max_attempts must be greater than or equal to 1, got: " + std::to_string(max_attempts_);
-    MS_LOG(ERROR) << err_msg;
-    RETURN_STATUS_SYNTAX_ERROR(err_msg);
-  }
-  return Status::OK();
-}
+    : RandomResizedCropOperation(size, scale, ratio, interpolation, max_attempts) {}
 
 std::shared_ptr<TensorOp> RandomCropDecodeResizeOperation::Build() {
   int32_t crop_height = size_[0];
@@ -1351,6 +1335,9 @@ std::shared_ptr<TensorOp> RandomCropDecodeResizeOperation::Build() {
                                                aspect_lower_bound, aspect_upper_bound, interpolation_, max_attempts_);
   return tensor_op;
 }
+
+RandomCropDecodeResizeOperation::RandomCropDecodeResizeOperation(const RandomResizedCropOperation &base)
+    : RandomResizedCropOperation(base) {}
 
 // RandomCropWithBBoxOperation
 RandomCropWithBBoxOperation::RandomCropWithBBoxOperation(std::vector<int32_t> size, std::vector<int32_t> padding,
@@ -1574,62 +1561,56 @@ RandomResizedCropOperation::RandomResizedCropOperation(std::vector<int32_t> size
 Status RandomResizedCropOperation::ValidateParams() {
   // size
   if (size_.size() != 2 && size_.size() != 1) {
-    std::string err_msg =
-      "RandomResizedCrop: size must be a vector of one or two values, got: " + std::to_string(size_.size());
+    std::string err_msg = Name() + ": size must be a vector of one or two values, got: " + std::to_string(size_.size());
     MS_LOG(ERROR) << err_msg;
     RETURN_STATUS_SYNTAX_ERROR(err_msg);
   }
   if (size_[0] <= 0 || (size_.size() == 2 && size_[1] <= 0)) {
-    std::string err_msg = "RandomResizedCrop: size must only contain positive integers.";
-    MS_LOG(ERROR) << "RandomResizedCrop: size must only contain positive integers, got: " << size_;
+    std::string err_msg = Name() + ": size must only contain positive integers.";
+    MS_LOG(ERROR) << Name() + ": size must only contain positive integers, got: " << size_;
     RETURN_STATUS_SYNTAX_ERROR(err_msg);
   }
   // scale
   if (scale_.size() != 2) {
-    std::string err_msg =
-      "RandomResizedCrop: scale must be a vector of two values, got: " + std::to_string(scale_.size());
+    std::string err_msg = Name() + ": scale must be a vector of two values, got: " + std::to_string(scale_.size());
     MS_LOG(ERROR) << err_msg;
     RETURN_STATUS_SYNTAX_ERROR(err_msg);
   }
   if (scale_[0] < 0) {
-    std::string err_msg = "RandomResizedCrop: min scale must be greater than or equal to 0.";
-    MS_LOG(ERROR) << "RandomResizedCrop: min scale must be greater than or equal to 0, got: " +
-                       std::to_string(scale_[0]);
+    std::string err_msg = Name() + ": min scale must be greater than or equal to 0.";
+    MS_LOG(ERROR) << Name() + ": min scale must be greater than or equal to 0, got: " + std::to_string(scale_[0]);
     RETURN_STATUS_SYNTAX_ERROR(err_msg);
   }
   if (scale_[1] <= 0) {
-    std::string err_msg = "RandomResizedCrop: max scale must be greater than 0.";
-    MS_LOG(ERROR) << "RandomResizedCrop: max scale must be greater than 0, got: " + std::to_string(scale_[1]);
+    std::string err_msg = Name() + ": max scale must be greater than 0.";
+    MS_LOG(ERROR) << Name() + ": max scale must be greater than 0, got: " + std::to_string(scale_[1]);
     RETURN_STATUS_SYNTAX_ERROR(err_msg);
   }
   if (scale_[1] < scale_[0]) {
-    std::string err_msg = "RandomResizedCrop: scale must have a size of two in the format of (min, max).";
-    MS_LOG(ERROR) << "RandomResizedCrop: scale must have a size of two in the format of (min, max), but got: "
-                  << scale_;
+    std::string err_msg = Name() + ": scale must have a size of two in the format of (min, max).";
+    MS_LOG(ERROR) << Name() + ": scale must have a size of two in the format of (min, max), but got: " << scale_;
     RETURN_STATUS_SYNTAX_ERROR(err_msg);
   }
   // ratio
   if (ratio_.size() != 2) {
-    std::string err_msg =
-      "RandomResizedCrop: ratio must be a vector of two values, got: " + std::to_string(ratio_.size());
+    std::string err_msg = Name() + ": ratio must be a vector of two values, got: " + std::to_string(ratio_.size());
     MS_LOG(ERROR) << err_msg;
     RETURN_STATUS_SYNTAX_ERROR(err_msg);
   }
   if (ratio_[0] <= 0 || ratio_[1] <= 0) {
-    std::string err_msg = "RandomResizedCrop: ratio must be greater than 0.";
-    MS_LOG(ERROR) << "RandomResizedCrop: ratio must be greater than 0, got: " << ratio_;
+    std::string err_msg = Name() + ": ratio must be greater than 0.";
+    MS_LOG(ERROR) << Name() + ": ratio must be greater than 0, got: " << ratio_;
     RETURN_STATUS_SYNTAX_ERROR(err_msg);
   }
   if (ratio_[1] < ratio_[0]) {
-    std::string err_msg = "RandomResizedCrop: ratio must have a size of two in the format of (min, max).";
-    MS_LOG(ERROR) << "RandomResizedCrop: ratio must have a size of two in the format of (min, max), but got: "
-                  << ratio_;
+    std::string err_msg = Name() + ": ratio must have a size of two in the format of (min, max).";
+    MS_LOG(ERROR) << Name() + ": ratio must have a size of two in the format of (min, max), but got: " << ratio_;
     RETURN_STATUS_SYNTAX_ERROR(err_msg);
   }
   // max_attempts
   if (max_attempts_ < 1) {
     std::string err_msg =
-      "RandomResizedCrop: max_attempts must be greater than or equal to 1, got: " + std::to_string(max_attempts_);
+      Name() + ": max_attempts must be greater than or equal to 1, got: " + std::to_string(max_attempts_);
     MS_LOG(ERROR) << err_msg;
     RETURN_STATUS_SYNTAX_ERROR(err_msg);
   }
@@ -1802,6 +1783,17 @@ std::shared_ptr<TensorOp> RandomRotationOperation::Build() {
   return tensor_op;
 }
 
+Status RandomRotationOperation::to_json(nlohmann::json *out_json) {
+  nlohmann::json args;
+  args["degrees"] = degrees_;
+  args["interpolation_mode"] = interpolation_mode_;
+  args["expand"] = expand_;
+  args["center"] = center_;
+  args["fill_value"] = fill_value_;
+  *out_json = args;
+  return Status::OK();
+}
+
 // RandomSelectSubpolicyOperation.
 RandomSelectSubpolicyOperation::RandomSelectSubpolicyOperation(
   std::vector<std::vector<std::pair<std::shared_ptr<TensorOperation>, double>>> policy)
@@ -1956,6 +1948,14 @@ std::shared_ptr<TensorOp> RescaleOperation::Build() {
   return tensor_op;
 }
 
+Status RescaleOperation::to_json(nlohmann::json *out_json) {
+  nlohmann::json args;
+  args["rescale"] = rescale_;
+  args["shift"] = shift_;
+  *out_json = args;
+  return Status::OK();
+}
+
 #endif
 // ResizeOperation
 ResizeOperation::ResizeOperation(std::vector<int32_t> size, InterpolationMode interpolation)
@@ -1987,7 +1987,14 @@ std::shared_ptr<TensorOp> ResizeOperation::Build() {
   return std::make_shared<ResizeOp>(height, width, interpolation_);
 }
 
-#ifdef ENABLE_ANDROID
+Status ResizeOperation::to_json(nlohmann::json *out_json) {
+  nlohmann::json args;
+  args["size"] = size_;
+  args["interpolation"] = interpolation_;
+  *out_json = args;
+  return Status::OK();
+}
+
 // RotateOperation
 RotateOperation::RotateOperation() { rotate_op = std::make_shared<RotateOp>(0); }
 
@@ -1995,8 +2002,9 @@ Status RotateOperation::ValidateParams() { return Status::OK(); }
 
 std::shared_ptr<TensorOp> RotateOperation::Build() { return rotate_op; }
 
-void RotateOperation::setAngle(uint64_t angle_id) { rotate_op->setAngle(angle_id); }
-#endif
+void RotateOperation::setAngle(uint64_t angle_id) {
+  std::dynamic_pointer_cast<RotateOp>(rotate_op)->setAngle(angle_id);
+}
 
 #ifndef ENABLE_ANDROID
 // ResizeWithBBoxOperation

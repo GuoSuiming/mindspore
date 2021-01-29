@@ -21,8 +21,7 @@
 #include "src/common/log_adapter.h"
 #ifdef PRIMITIVE_WRITEABLE
 #include <float.h>
-
-#include "tools/converter/quantizer/quantize_util.h"
+#include "src/param_value_lite.h"
 #endif
 
 #ifndef PRIMITIVE_WRITEABLE
@@ -48,6 +47,8 @@ int DeConv2D::GetPadRight() const { return this->primitive_->value.AsDeConv2D()-
 int DeConv2D::GetDilateW() const { return this->primitive_->value.AsDeConv2D()->dilateW; }
 int DeConv2D::GetDilateH() const { return this->primitive_->value.AsDeConv2D()->dilateH; }
 int DeConv2D::GetActivationType() const { return this->primitive_->value.AsDeConv2D()->activationType; }
+int DeConv2D::GetOutputPaddingW() const { return this->primitive_->value.AsDeConv2D()->outputPaddingW; }
+int DeConv2D::GetOutputPaddingH() const { return this->primitive_->value.AsDeConv2D()->outputPaddingH; }
 
 void DeConv2D::SetFormat(int format) { this->primitive_->value.AsDeConv2D()->format = (schema::Format)format; }
 void DeConv2D::SetGroup(int group) { this->primitive_->value.AsDeConv2D()->group = group; }
@@ -272,10 +273,11 @@ int DeConv2D::UnPackToFlatBuilder(const schema::Primitive *primitive, flatbuffer
     MS_LOG(ERROR) << "value_as_DeConv2D return nullptr";
     return RET_ERROR;
   }
-  auto val_offset = schema::CreateDeConv2D(
-    *fbb, attr->format(), attr->group(), attr->channelIn(), attr->channelOut(), attr->kernelW(), attr->kernelH(),
-    attr->strideW(), attr->strideH(), attr->padMode(), attr->padUp(), attr->padDown(), attr->padLeft(),
-    attr->padRight(), attr->dilateW(), attr->dilateH(), attr->hasBias(), attr->activationType());
+  auto val_offset =
+    schema::CreateDeConv2D(*fbb, attr->format(), attr->group(), attr->channelIn(), attr->channelOut(), attr->kernelW(),
+                           attr->kernelH(), attr->strideW(), attr->strideH(), attr->padMode(), attr->padUp(),
+                           attr->padDown(), attr->padLeft(), attr->padRight(), attr->dilateW(), attr->dilateH(),
+                           attr->hasBias(), attr->activationType(), attr->outputPaddingW(), attr->outputPaddingH());
   auto prim_offset = schema::CreatePrimitive(*fbb, schema::PrimitiveType_DeConv2D, val_offset.o);
   fbb->Finish(prim_offset);
   return RET_OK;
@@ -296,6 +298,8 @@ int DeConv2D::GetPadRight() const { return this->primitive_->value_as_DeConv2D()
 int DeConv2D::GetDilateW() const { return this->primitive_->value_as_DeConv2D()->dilateW(); }
 int DeConv2D::GetDilateH() const { return this->primitive_->value_as_DeConv2D()->dilateH(); }
 int DeConv2D::GetActivationType() const { return this->primitive_->value_as_DeConv2D()->activationType(); }
+int DeConv2D::GetOutputPaddingW() const { return this->primitive_->value_as_DeConv2D()->outputPaddingW(); }
+int DeConv2D::GetOutputPaddingH() const { return this->primitive_->value_as_DeConv2D()->outputPaddingH(); }
 
 PrimitiveC *DeConv2DCreator(const schema::Primitive *primitive) {
   return PrimitiveC::NewPrimitiveC<DeConv2D>(primitive);
@@ -348,6 +352,8 @@ int DeConv2D::InferShape(std::vector<lite::Tensor *> inputs_, std::vector<lite::
     MS_LOG(ERROR) << "unsupported pad mode for deconv";
     return RET_ERROR;
   }
+  output_h += GetOutputPaddingH();
+  output_w += GetOutputPaddingW();
   std::vector<int> out_shape = {output_n, output_h, output_w, output_c};
   output->set_shape(out_shape);
 

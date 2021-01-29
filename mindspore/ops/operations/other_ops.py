@@ -128,13 +128,13 @@ class BoundingBoxEncode(PrimitiveWithInfer):
         ``Ascend`` ``GPU``
 
     Examples:
-        >>> anchor_box = Tensor([[4, 1, 2, 1], [2, 2, 2, 3]], mindspore.float32)
-        >>> groundtruth_box = Tensor([[3, 1, 2, 2], [1, 2, 1, 4]], mindspore.float32)
+        >>> anchor_box = Tensor([[2, 2, 2, 3], [2, 2, 2, 3]], mindspore.float32)
+        >>> groundtruth_box = Tensor([[1, 2, 1, 4], [1, 2, 1, 4]], mindspore.float32)
         >>> boundingbox_encode = ops.BoundingBoxEncode(means=(0.0, 0.0, 0.0, 0.0), stds=(1.0, 1.0, 1.0, 1.0))
         >>> output = boundingbox_encode(anchor_box, groundtruth_box)
         >>> print(output)
-        [[ 5.0000000e-01  5.0000000e-01 -6.5504000e+04  6.9335938e-01]
-         [-1.0000000e+00  2.5000000e-01  0.0000000e+00  4.0551758e-01]]
+        [[ －1.  0.25  0.  0.40551758]
+         [ －1.  0.25  0.  0.40551758]]
     """
 
     @prim_attr_register
@@ -417,9 +417,6 @@ class Depend(Primitive):
     """
     Depend is used for processing side-effect operations.
 
-    Note:
-        Internal API, not for public use.
-
     Inputs:
         - **value** (Tensor) - the real value to return for depend operator.
         - **expr** (Expression) - the expression to execute with no outputs.
@@ -567,7 +564,7 @@ class PopulationCount(PrimitiveWithInfer):
         - **input** (Tensor) -  The data type must be int16 or uint16.
 
     Outputs:
-        Tensor, with the sam  shape as the input.
+        Tensor, with the same shape as the input.
 
     Supported Platforms:
         ``Ascend``

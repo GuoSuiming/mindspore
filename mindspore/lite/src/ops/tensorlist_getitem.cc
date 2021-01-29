@@ -120,8 +120,12 @@ int TensorListGetItem::InferShape(std::vector<lite::Tensor *> inputs_, std::vect
   if (!infer_flag()) {
     return RET_INFER_INVALID;
   }
-  auto input0 = reinterpret_cast<TensorList *>(inputs_[0]);
-  auto get_index = inputs_[1];
+  MS_ASSERT(inputs_.size() >= 3);
+  MS_ASSERT(inputs_.at(0) != nullptr);
+  MS_ASSERT(inputs_.at(1) != nullptr);
+  MS_ASSERT(inputs_.at(2) != nullptr);
+  auto input0 = reinterpret_cast<TensorList *>(inputs_.at(0));
+  auto get_index = inputs_.at(1);
   MS_ASSERT(get_index != nullptr);
   if (get_index->ElementsNum() != 1) {
     MS_LOG(ERROR) << "get_index->ElementsNum():" << get_index->ElementsNum() << " must be equal to 1!";
@@ -175,9 +179,10 @@ int TensorListGetItem::InferShape(std::vector<lite::Tensor *> inputs_, std::vect
       MS_LOG(ERROR) << "element_shape_ is not fullyDefined!";
       return RET_ERROR;
     }
-    output->set_data_type(GetElementDType());
+    output->set_data_type(input0->data_type());
     output->set_shape(element_shape_);
   }
+  output->set_format(input0->GetTensor(index_)->format());
   return RET_OK;
 }
 }  // namespace lite

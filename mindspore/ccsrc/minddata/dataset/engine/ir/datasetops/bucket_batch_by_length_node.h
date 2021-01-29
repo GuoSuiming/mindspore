@@ -55,13 +55,22 @@ class BucketBatchByLengthNode : public DatasetNode {
   /// \brief a base class override function to create the required runtime dataset op objects for this class
   /// \param node_ops - A vector containing shared pointer to the Dataset Ops that this object will create
   /// \return Status Status::OK() if build successfully
-  Status Build(std::vector<std::shared_ptr<DatasetOp>> *node_ops) override;
+  Status Build(std::vector<std::shared_ptr<DatasetOp>> *const node_ops) override;
 
   /// \brief Parameters validation
   /// \return Status Status::OK() if all the parameters are valid
   Status ValidateParams() override;
 
   bool IsSizeDefined() override { return false; };
+
+  /// \brief Getter functions
+  const std::vector<std::string> &ColumnNames() const { return column_names_; }
+  const std::vector<int32_t> &BucketBoundaries() const { return bucket_boundaries_; }
+  const std::vector<int32_t> &BucketBatchSizes() const { return bucket_batch_sizes_; }
+  const std::shared_ptr<TensorOp> &ElementLengthFunction() const { return element_length_function_; }
+  const std::map<std::string, std::pair<TensorShape, std::shared_ptr<Tensor>>> &PadInfo() const { return pad_info_; }
+  bool PadToBucketBoundary() const { return pad_to_bucket_boundary_; }
+  bool DropRemainder() const { return drop_remainder_; }
 
  private:
   std::vector<std::string> column_names_;

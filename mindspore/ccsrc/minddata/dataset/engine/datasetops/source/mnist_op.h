@@ -162,7 +162,7 @@ class MnistOp : public ParallelOp, public RandomAccessOp {
   /// \param[in] p Pointer to the NodePass to be accepted
   /// \param[out] modified Indicator if the node was changed at all
   /// \return Status of the node visit
-  Status Accept(NodePass *p, bool *modified) override;
+  Status Accept(NodePass *p, bool *const modified) override;
 
   // Op name getter
   // @return Name of the current Op
@@ -251,6 +251,8 @@ class MnistOp : public ParallelOp, public RandomAccessOp {
   std::vector<MnistLabelPair> image_label_pairs_;
   std::vector<std::string> image_names_;
   std::vector<std::string> label_names_;
+  std::vector<std::string> image_path_;
+  std::vector<std::string> label_path_;
 };
 }  // namespace dataset
 }  // namespace mindspore

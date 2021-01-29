@@ -22,7 +22,7 @@ export BUILD_PATH="${BASEPATH}/build/"
 usage()
 {
   echo "Usage:"
-  echo "bash build.sh [-d] [-r] [-v] [-c on|off] [-t on|off] [-g on|off] [-h] [-b ge] [-m infer|train] \\"
+  echo "bash build.sh [-d] [-r] [-v] [-c on|off] [-t ut|st] [-g on|off] [-h] [-b ge] [-m infer|train] \\"
   echo "              [-a on|off] [-p on|off] [-i] [-L] [-R] [-D on|off] [-j[n]] [-e gpu|ascend|cpu|npu] \\"
   echo "              [-P on|off] [-z [on|off]] [-M on|off] [-V 9.2|10.1|310|910] [-I arm64|arm32|x86_64] [-K] \\"
   echo "              [-B on|off] [-E] [-l on|off] [-n full|lite|off] [-T on|off] \\"
@@ -33,7 +33,7 @@ usage()
   echo "    -r Release mode, default mode"
   echo "    -v Display build command"
   echo "    -c Enable code coverage, default off"
-  echo "    -t Run testcases, default on"
+  echo "    -t Run testcases, default off"
   echo "    -g Use glog to output log, default on"
   echo "    -h Print usage"
   echo "    -b Select other backend, available: \\"
@@ -86,6 +86,7 @@ checkopts()
   VERBOSE=""
   ENABLE_COVERAGE="off"
   RUN_TESTCASES="off"
+  RUN_CPP_ST_TESTS="off"
   ENABLE_BACKEND=""
   TRAIN_MODE="INFER"
   ENABLE_ASAN="off"
@@ -152,8 +153,17 @@ checkopts()
         ENABLE_COVERAGE="$OPTARG"
         ;;
       t)
-        check_on_off $OPTARG t
-        RUN_TESTCASES="$OPTARG"
+        if [[ "X$OPTARG" == "Xon" || "X$OPTARG" == "Xut" ]]; then
+          RUN_TESTCASES="on"
+        elif [[ "X$OPTARG" == "Xoff" ]]; then
+          RUN_TESTCASES="off"
+        elif [[ "X$OPTARG" == "Xst" ]]; then
+          RUN_CPP_ST_TESTS="on"
+        else
+          echo "Invalid value ${OPTARG} for option -t"
+          usage
+          exit 1
+        fi
         ;;
       g)
         check_on_off $OPTARG g
@@ -385,6 +395,7 @@ if [[ "X$ENABLE_AKG" = "Xon" ]] && [[ "X$ENABLE_D" = "Xon" || "X$ENABLE_GPU" = "
     git submodule update --init --recursive akg
 fi
 
+
 build_exit()
 {
     echo "$@" >&2
@@ -405,6 +416,9 @@ build_mindspore()
     fi
     if [[ "X$RUN_TESTCASES" = "Xon" ]]; then
       CMAKE_ARGS="${CMAKE_ARGS} -DENABLE_TESTCASES=ON"
+    fi
+    if [[ "X$RUN_CPP_ST_TESTS" = "Xon" ]]; then
+      CMAKE_ARGS="${CMAKE_ARGS} -DENABLE_CPP_ST=ON"
     fi
     if [[ -n "$ENABLE_BACKEND" ]]; then
       CMAKE_ARGS="${CMAKE_ARGS} -DENABLE_${ENABLE_BACKEND}=ON"
@@ -473,7 +487,7 @@ build_mindspore()
 
 checkndk() {
     if [ "${ANDROID_NDK}" ]; then
-        echo -e "\e[31mANDROID_NDK_PATH=$ANDROID_NDK  \e[0m"
+        echo -e "\e[31mANDROID_NDK=$ANDROID_NDK  \e[0m"
     else
         echo -e "\e[31mplease set ANDROID_NDK in environment variable for example: export ANDROID_NDK=/root/usr/android-ndk-r20b/ \e[0m"
         exit 1
@@ -494,6 +508,11 @@ get_version() {
     VERSION_MINOR=$(grep "const int ms_version_minor =" ${BASEPATH}/mindspore/lite/include/version.h | tr -dc "[0-9]")
     VERSION_REVISION=$(grep "const int ms_version_revision =" ${BASEPATH}/mindspore/lite/include/version.h | tr -dc "[0-9]")
     VERSION_STR=${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_REVISION}
+}
+
+write_commit_file() {
+    COMMIT_STR=$(git log -1 | grep commit)
+    echo ${COMMIT_STR} > "${BASEPATH}/mindspore/lite/build/.commit_id"
 }
 
 build_lite()
@@ -528,6 +547,7 @@ build_lite()
     fi
     mkdir -pv build
     cd build
+    write_commit_file
     BUILD_TYPE="Release"
     if [[ "${DEBUG_MODE}" == "on" ]]; then
       BUILD_TYPE="Debug"
@@ -538,7 +558,7 @@ build_lite()
         cmake -DCMAKE_TOOLCHAIN_FILE="${ANDROID_NDK}/build/cmake/android.toolchain.cmake" -DANDROID_NATIVE_API_LEVEL="19"      \
               -DANDROID_NDK="${ANDROID_NDK}" -DANDROID_ABI="arm64-v8a" -DANDROID_TOOLCHAIN_NAME="aarch64-linux-android-clang"  \
               -DANDROID_STL=${ANDROID_STL} -DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DSUPPORT_TRAIN=${SUPPORT_TRAIN}                     \
-              -DPLATFORM_ARM64=on -DENABLE_NEON=on -DENABLE_FP16="off"      \
+              -DPLATFORM_ARM64=on -DENABLE_NEON=on -DENABLE_FP16="on"      \
               -DENABLE_TOOLS=${ENABLE_TOOLS} -DENABLE_CONVERTER=${ENABLE_CONVERTER} -DBUILD_TESTCASES=${RUN_TESTCASES} \
               -DSUPPORT_GPU=${LITE_ENABLE_GPU} -DSUPPORT_NPU=${LITE_ENABLE_NPU} -DENABLE_V0=on \
               -DOFFLINE_COMPILE=${OPENCL_OFFLINE_COMPILE} -DBUILD_MINDDATA=${COMPILE_MINDDATA_LITE} \
@@ -583,33 +603,40 @@ build_lite()
 
 build_lite_java_arm64() {
     # build mindspore-lite arm64
-    if [[ "X$INC_BUILD" = "Xoff" ]] || [[ ! -f "${BASEPATH}/output/mindspore-lite-${VERSION_STR}-inference-android-aarch64.tar.gz" ]]; then
+    JTARBALL=mindspore-lite-${VERSION_STR}-inference-android-aarch64
+    if [[ "X$SUPPORT_TRAIN" = "Xon" ]]; then
+        JTARBALL=mindspore-lite-${VERSION_STR}-train-android-aarch64
+    fi
+    if [[ "X$INC_BUILD" = "Xoff" ]] || [[ ! -f "${BASEPATH}/output/${JTARBALL}.tar.gz" ]]; then
       build_lite "arm64" "off"
     fi
     # copy arm64 so
     cd ${BASEPATH}/output/
-    rm -rf mindspore-lite-${VERSION_STR}-inference-android-aarch64
-    tar -zxvf mindspore-lite-${VERSION_STR}-inference-android-aarch64.tar.gz
+    rm -rf ${JTARBALL}
+    tar -zxvf ${JTARBALL}.tar.gz
     [ -n "${JAVA_PATH}" ] && rm -rf ${JAVA_PATH}/java/app/libs/arm64-v8a/
     mkdir -p ${JAVA_PATH}/java/app/libs/arm64-v8a/
-    cp ${BASEPATH}/output/mindspore-lite-${VERSION_STR}-inference-android-aarch64/lib/libmindspore-lite.so ${JAVA_PATH}/java/app/libs/arm64-v8a/
-    echo mindspore-lite-${VERSION_STR}-inference-android-aarch64
-    [ -n "${VERSION_STR}" ] && rm -rf mindspore-lite-${VERSION_STR}-inference-android-aarch64
+    cp ${BASEPATH}/output/${JTARBALL}/lib/libmindspore-lite.so ${JAVA_PATH}/java/app/libs/arm64-v8a/
+    [ -n "${VERSION_STR}" ] && rm -rf ${JTARBALL}
 }
 
 build_lite_java_arm32() {
     # build mindspore-lite arm32
-    if [[ "X$INC_BUILD" = "Xoff" ]] || [[ ! -f "${BASEPATH}/output/mindspore-lite-${VERSION_STR}-inference-android-aarch32.tar.gz" ]]; then
+    JTARBALL=mindspore-lite-${VERSION_STR}-inference-android-aarch32
+    if [[ "X$SUPPORT_TRAIN" = "Xon" ]]; then
+        JTARBALL=mindspore-lite-${VERSION_STR}-train-android-aarch32
+    fi
+    if [[ "X$INC_BUILD" = "Xoff" ]] || [[ ! -f "${BASEPATH}/output/${JTARBALL}.tar.gz" ]]; then
       build_lite  "arm32" "off"
     fi
     # copy arm32 so
     cd ${BASEPATH}/output/
-    rm -rf mindspore-lite-${VERSION_STR}-inference-android-aarch32
-    tar -zxvf mindspore-lite-${VERSION_STR}-inference-android-aarch32.tar.gz
+    rm -rf ${JTARBALL}
+    tar -zxvf ${JTARBALL}.tar.gz
     [ -n "${JAVA_PATH}" ] && rm -rf ${JAVA_PATH}/java/app/libs/armeabi-v7a/
     mkdir -p ${JAVA_PATH}/java/app/libs/armeabi-v7a/
-    cp ${BASEPATH}/output/mindspore-lite-${VERSION_STR}-inference-android-aarch32/lib/libmindspore-lite.so ${JAVA_PATH}/java/app/libs/armeabi-v7a/
-    [ -n "${VERSION_STR}" ] && rm -rf mindspore-lite-${VERSION_STR}-inference-android-aarch32
+    cp ${BASEPATH}/output/${JTARBALL}/lib/libmindspore-lite.so ${JAVA_PATH}/java/app/libs/armeabi-v7a/
+    [ -n "${VERSION_STR}" ] && rm -rf ${JTARBALL}
 }
 
 build_jni_arm64() {
@@ -622,7 +649,7 @@ build_jni_arm64() {
           -DANDROID_NDK="${ANDROID_NDK}" -DANDROID_ABI="arm64-v8a" -DANDROID_TOOLCHAIN_NAME="aarch64-linux-android-clang"  \
           -DMS_VERSION_MAJOR=${VERSION_MAJOR} -DMS_VERSION_MINOR=${VERSION_MINOR} -DMS_VERSION_REVISION=${VERSION_REVISION} \
           -DANDROID_STL="c++_static" -DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DENABLE_VERBOSE=${ENABLE_VERBOSE} \
-          -DPLATFORM_ARM64=on "${JAVA_PATH}/java/app/src/main/native"
+          -DSUPPORT_TRAIN=${SUPPORT_TRAIN} -DPLATFORM_ARM64=on "${JAVA_PATH}/java/app/src/main/native"
     make -j$THREAD_NUM
     if [[ $? -ne 0 ]]; then
         echo "---------------- mindspore lite: build jni arm64 failed----------------"
@@ -642,7 +669,7 @@ build_jni_arm32() {
           -DANDROID_NDK="${ANDROID_NDK}" -DANDROID_ABI="armeabi-v7a" -DANDROID_TOOLCHAIN_NAME="aarch64-linux-android-clang"  \
           -DMS_VERSION_MAJOR=${VERSION_MAJOR} -DMS_VERSION_MINOR=${VERSION_MINOR} -DMS_VERSION_REVISION=${VERSION_REVISION} \
           -DANDROID_STL="c++_static" -DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DENABLE_VERBOSE=${ENABLE_VERBOSE} \
-          -DPLATFORM_ARM32=on "${JAVA_PATH}/java/app/src/main/native"
+          -DSUPPORT_TRAIN=${SUPPORT_TRAIN} -DPLATFORM_ARM32=on "${JAVA_PATH}/java/app/src/main/native"
     make -j$THREAD_NUM
     if [[ $? -ne 0 ]]; then
         echo "---------------- mindspore lite: build jni arm32 failed----------------"
@@ -680,7 +707,7 @@ build_java() {
 
 make_clean()
 {
-  echo "enbale make clean"
+  echo "enable make clean"
   cd "${BUILD_PATH}/mindspore"
   cmake --build . --target clean
 }

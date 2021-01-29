@@ -73,7 +73,7 @@ class CSVNode : public NonMappableSourceNode {
   /// \brief a base class override function to create the required runtime dataset op objects for this class
   /// \param node_ops - A vector containing shared pointer to the Dataset Ops that this object will create
   /// \return Status Status::OK() if build successfully
-  Status Build(std::vector<std::shared_ptr<DatasetOp>> *node_ops) override;
+  Status Build(std::vector<std::shared_ptr<DatasetOp>> *const node_ops) override;
 
   /// \brief Parameters validation
   /// \return Status Status::OK() if all the parameters are valid
@@ -91,6 +91,37 @@ class CSVNode : public NonMappableSourceNode {
   /// \return Status of the function
   Status GetDatasetSize(const std::shared_ptr<DatasetSizeGetter> &size_getter, bool estimate,
                         int64_t *dataset_size) override;
+
+  /// \brief Getter functions
+  const std::vector<std::string> &DatasetFiles() const { return dataset_files_; }
+  char FieldDelim() const { return field_delim_; }
+  const std::vector<std::shared_ptr<CsvBase>> &ColumnDefaults() const { return column_defaults_; }
+  const std::vector<std::string> &ColumnNames() const { return column_names_; }
+  int64_t NumSamples() const { return num_samples_; }
+  ShuffleMode Shuffle() const { return shuffle_; }
+  int32_t NumShards() const { return num_shards_; }
+  int32_t ShardId() const { return shard_id_; }
+
+  /// \brief Get the arguments of node
+  /// \param[out] out_json JSON string of all attributes
+  /// \return Status of the function
+  Status to_json(nlohmann::json *out_json) override;
+
+  /// \brief CSV by itself is a non-mappable dataset that does not support sampling.
+  ///     However, if a cache operator is injected at some other place higher in the tree, that cache can
+  ///     inherit this sampler from the leaf, providing sampling support from the caching layer.
+  ///     That is why we setup the sampler for a leaf node that does not use sampling.
+  ///     Note: This function is common among NonMappableSourceNode and should be promoted to its parent class.
+  /// \param[in] sampler The sampler to setup
+  /// \return Status of the function
+  Status SetupSamplerForCache(std::shared_ptr<SamplerObj> *sampler) override;
+
+  /// \brief If a cache has been added into the ascendant tree over this CSV node, then the cache will be executing
+  ///     a sampler for fetching the data.  As such, any options in the CSV node need to be reset to its defaults so
+  ///     that this CSV node will produce the full set of data into the cache.
+  ///     Note: This function is common among NonMappableSourceNode and should be promoted to its parent class.
+  /// \return Status of the function
+  Status MakeSimpleProducer() override;
 
  private:
   std::vector<std::string> dataset_files_;

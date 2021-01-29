@@ -40,6 +40,7 @@ namespace mindspore {
 namespace ps {
 constexpr size_t kHostCacheScaleFactor = 10;
 constexpr size_t kMaxThreadNum = 16;
+constexpr size_t kMinIdsPerThread = 10000;
 using mindspore::kernel::Address;
 
 struct HashTableInfo {
@@ -169,7 +170,10 @@ class PsCacheManager {
   void DumpStatisticsInfo(size_t each_print_step = 1000);
   bool SyncHostEmbeddingTable();
   bool SyncDeviceEmbeddingTable();
-
+  bool CheckIDInDeviceTask(const int *batch_ids, const size_t batch_ids_len, int *hash_index, bool *in_device,
+                           size_t *hash_hit_count);
+  bool CheckIDInDevice(const int *batch_ids, const size_t batch_ids_len, int *hash_index, bool *in_device);
+  bool ResetEmbeddingHashMap();
   bool initialized_ps_cache_{false};
   std::string channel_name_;
   std::mutex channel_mutex_;
@@ -195,6 +199,8 @@ class PsCacheManager {
   std::atomic_bool finish_init_parameter_server_{false};
   std::atomic_bool running_{false};
   bool finish_embedding_table_sync_{false};
+  bool device_need_wait_graph_{false};
+  bool host_need_wait_graph_{false};
 };
 
 static PsCacheManager &ps_cache_instance = PsCacheManager::GetInstance();

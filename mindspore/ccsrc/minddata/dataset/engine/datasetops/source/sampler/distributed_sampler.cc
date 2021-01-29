@@ -43,6 +43,9 @@ DistributedSamplerRT::DistributedSamplerRT(int64_t num_samples, int64_t num_dev,
 }
 
 Status DistributedSamplerRT::InitSampler() {
+  if (is_initialized) {
+    return Status::OK();
+  }
   // Special value of 0 for num_samples means that the user wants to sample the entire set of data.
   // If the user asked to sample more rows than exists in the dataset, adjust the num_samples accordingly.
   if (num_samples_ == 0 || num_samples_ > num_rows_) {
@@ -78,6 +81,7 @@ Status DistributedSamplerRT::InitSampler() {
   }
   if (!samples_per_buffer_) non_empty_ = false;
 
+  is_initialized = true;
   return Status::OK();
 }
 
@@ -173,8 +177,21 @@ int64_t DistributedSamplerRT::CalculateNumSamples(int64_t num_rows) {
     child_num_rows = child_[0]->CalculateNumSamples(num_rows);
   }
   int64_t num_samples = (num_samples_ > 0) ? std::min(child_num_rows, num_samples_) : child_num_rows;
-  int64_t num_per_shard = std::ceil(num_rows * 1.0 / num_devices_);
-  return std::min(num_samples, num_per_shard);
+  int64_t remainder = (child_num_rows + offset_) % num_devices_;
+  int64_t shard_size = (child_num_rows + offset_) / num_devices_;
+  if (offset_ != -1 || !even_dist_) {
+    if (offset_ == -1) offset_ = 0;
+    if (device_id_ < remainder) shard_size++;
+    if (device_id_ < offset_) shard_size--;
+  } else {
+    offset_ = 0;
+    shard_size = (child_num_rows + num_devices_ - 1) / num_devices_;
+  }
+  // add 1 to an empty shard
+  // this logic is needed to follow the logic in initSampler that is written for ConcatDataset
+  if (shard_size == 0) shard_size++;
+
+  return std::min(num_samples, shard_size);
 }
 
 void DistributedSamplerRT::SamplerPrint(std::ostream &out, bool show_all) const {
@@ -184,6 +201,27 @@ void DistributedSamplerRT::SamplerPrint(std::ostream &out, bool show_all) const 
     out << "\nseed: " << seed_ << "\ndevice_id: " << device_id_ << "\nnum_devices: " << num_devices_
         << "\nshuffle: " << shuffle_;
   }
+}
+
+Status DistributedSamplerRT::to_json(nlohmann::json *out_json) {
+  nlohmann::json args;
+  args["sampler_name"] = "DistributedSampler";
+  args["num_shards"] = num_devices_;
+  args["shard_id"] = device_id_;
+  args["shuffle"] = shuffle_;
+  args["num_samples"] = num_samples_;
+  args["offset"] = offset_;
+  if (this->HasChildSampler()) {
+    std::vector<nlohmann::json> children_args;
+    for (auto child : child_) {
+      nlohmann::json child_arg;
+      RETURN_IF_NOT_OK(child->to_json(&child_arg));
+      children_args.push_back(child_arg);
+    }
+    args["child_sampler"] = children_args;
+  }
+  *out_json = args;
+  return Status::OK();
 }
 
 }  // namespace dataset

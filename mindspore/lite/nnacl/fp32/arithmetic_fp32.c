@@ -16,7 +16,6 @@
 
 #include "nnacl/fp32/arithmetic_fp32.h"
 #include <math.h>
-#include <float.h>
 
 #define ACCURACY_DATA 0.00000001
 
@@ -800,8 +799,8 @@ int ElementSubRelu6(const float *in0, const float *in1, float *out, int size) {
 
 int BroadcastDiv(const float *in0, const float *in1, float *tile_in0, float *tile_in1, float *out, int size,
                  ArithmeticParameter *param) {
-  TileDimensionsFp32(in0, in1, tile_in0, tile_in0, param);
-  return ElementDiv(tile_in0, tile_in0, out, size);
+  TileDimensionsFp32(in0, in1, tile_in0, tile_in1, param);
+  return ElementDiv(tile_in0, tile_in1, out, size);
 }
 
 int ElementDiv(const float *in0, const float *in1, float *out, int size) {
@@ -987,10 +986,20 @@ int ElementMaximumInt(const int *in0, const int *in1, int *out, int size) {
   return NNACL_OK;
 }
 
-int BroadcastMaximum(const float *in0, const float *in1, float *tile_in0, float *tile_in1, float *out, int size,
-                     ArithmeticParameter *param) {
-  TileDimensionsFp32(in0, in1, tile_in0, tile_in1, param);
-  return ElementMaximum(tile_in0, tile_in1, out, size);
+int ElementMinimumInt(const int *input0, const int *input1, int *output, const int element_size) {
+  int index = 0;
+#ifdef ENABLE_NEON
+  for (; index <= element_size - 4; index += C4NUM) {
+    int32x4_t vin0 = vld1q_s32(input0 + index);
+    int32x4_t vin1 = vld1q_s32(input1 + index);
+    int32x4_t vout = vminq_s32(vin0, vin1);
+    vst1q_s32(output + index, vout);
+  }
+#endif
+  for (; index < element_size; index++) {
+    output[index] = input0[index] > input1[index] ? input1[index] : input0[index];
+  }
+  return NNACL_OK;
 }
 
 int ElementMinimum(const float *in0, const float *in1, float *out, int size) {
@@ -1010,65 +1019,6 @@ int ElementMinimum(const float *in0, const float *in1, float *out, int size) {
 }
 
 #undef ACCURACY_DATA
-
-#ifdef ENABLE_NNACL_INFER_SHAPE
-int ArithmeticInferShape(int **in_shape, size_t *dim_size, int *out_shape, int *in_format, int *out_format,
-                         int *in_datatype, int *out_datatype, OpParameter *param) {
-  *out_format = in_format[0];
-  *out_datatype = in_datatype[0];
-  const ArithmeticParameter *arithmetic_parameter = (const ArithmeticParameter *)param;
-  int ndim0 = dim_size[0];
-  int ndim1 = dim_size[1];
-  int *in_shape0 = in_shape[0];
-  int *in_shape1 = in_shape[1];
-  if (ndim0 < ndim1) {
-    arithmetic_parameter->ndim_ = ndim1;
-    int fill_dim_num = ndim1 - ndim0;
-    int j = 0;
-    for (int i = 0; i < ndim1; ++i) {
-      if (i < fill_dim_num) {
-        arithmetic_parameter->in_shape0_[i] = 1;
-      } else {
-        arithmetic_parameter->in_shape0_[i] = in_shape0[j++];
-      }
-      arithmetic_parameter->in_shape1_[i] = in_shape1[i];
-    }
-  } else if (ndim0 > ndim1) {
-    arithmetic_parameter->ndim_ = ndim0;
-    int fill_dim_num = ndim0 - ndim1;
-    int j = 0;
-    for (int i = 0; i < ndim0; ++i) {
-      if (i < fill_dim_num) {
-        arithmetic_parameter->in_shape1_[i] = 1;
-      } else {
-        arithmetic_parameter->in_shape1_[i] = in_shape1[j++];
-      }
-      arithmetic_parameter->in_shape0_[i] = in_shape0[i];
-    }
-  } else {
-    arithmetic_parameter->ndim_ = ndim0;
-    for (int i = 0; i < ndim0; ++i) {
-      arithmetic_parameter->in_shape0_[i] = in_shape0[i];
-      arithmetic_parameter->in_shape1_[i] = in_shape1[i];
-    }
-  }
-  int j = 0;
-  for (size_t i = 0; i < arithmetic_parameter->ndim_; ++i) {
-    if (arithmetic_parameter->in_shape0_[i] != arithmetic_parameter->in_shape1_[i]) {
-      if (arithmetic_parameter->in_shape0_[i] == 1) {
-        out_shape[j++] = arithmetic_parameter->in_shape1_[i];
-      } else if (arithmetic_parameter->in_shape1_[i] == 1) {
-        out_shape[j++] = arithmetic_parameter->in_shape0_[i];
-      } else {
-        return NNACL_PARAM_INVALID;
-      }
-    } else {
-      out_shape[j++] = arithmetic_parameter->in_shape0_[i];
-    }
-  }
-  return NNACL_OK;
-}
-#endif
 
 void TileOneDimensionFp32(const float *inData, float *outData, int dim, size_t ndim, const int *inShape,
                           const int *inStrides, const int *outStrides, const int *multiple) {

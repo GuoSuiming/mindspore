@@ -149,7 +149,7 @@ class AllGather(PrimitiveWithInfer):
         ``Ascend`` ``GPU``
 
     Examples:
-        >>> # This example should be run with two devices. Refer to the tutorial > Distirbuted Training on mindspore.cn.
+        >>> # This example should be run with two devices. Refer to the tutorial > Distributed Training on mindspore.cn.
         >>> import numpy as np
         >>> import mindspore.ops.operations as ops
         >>> import mindspore.nn as nn
@@ -272,7 +272,7 @@ class ReduceScatter(PrimitiveWithInfer):
         ``Ascend`` ``GPU``
 
     Examples:
-        >>> # This example should be run with two devices. Refer to the tutorial > Distirbuted Training on mindspore.cn.
+        >>> # This example should be run with two devices. Refer to the tutorial > Distributed Training on mindspore.cn.
         >>> from mindspore import Tensor, context
         >>> from mindspore.communication import init
         >>> from mindspore.ops.operations.comm_ops import ReduceOp
@@ -396,15 +396,19 @@ class Broadcast(PrimitiveWithInfer):
         TypeError: If root_rank is not a integer or group is not a string.
 
     Supported Platforms:
-        ``Ascend``
+        ``Ascend``, ``GPU``
 
     Examples:
+        >>> # This example should be run with multiple processes.
+        >>> # Please refer to the tutorial > Distributed Training on mindspore.cn.
         >>> from mindspore import Tensor
+        >>> from mindspore import context
         >>> from mindspore.communication import init
         >>> import mindspore.nn as nn
         >>> import mindspore.ops.operations as ops
         >>> import numpy as np
         >>>
+        >>> context.set_context(mode=context.GRAPH_MODE)
         >>> init()
         >>> class Net(nn.Cell):
         ...     def __init__(self):
@@ -565,6 +569,35 @@ class _MirrorOperator(PrimitiveWithInfer):
 
 
 mirror = _MirrorOperator()
+
+
+class _MirrorMiniStepOperator(PrimitiveWithInfer):
+    """
+    Auto parallel virtual operator. Do nothing in forward, do all reduce and mean in backward. It is only for
+    internal use of parallel modules and cannot be called by users.
+
+    Args:
+        group (str): The communication group to work on. Default: None.
+        dev_num (int): The device number of the group. Default: None.
+        mean_flag (bool): Whether use mean in backward. Default: None.
+        grad_accumulation_step (int): The grad accumulation step. Default: None.
+    """
+
+    @prim_attr_register
+    def __init__(self, group=None, dev_num=None, mean_flag=None, grad_accumulation_step=None):
+        self.group = group
+        self.dev_num = dev_num
+        self.mean_flag = mean_flag
+        self.grad_accumulation_step = grad_accumulation_step
+
+    def infer_shape(self, x_shape, y_shape, z_shape):
+        return x_shape
+
+    def infer_dtype(self, x_dtype, y_shape, z_shape):
+        return x_dtype
+
+
+mirror_mini_step = _MirrorMiniStepOperator()
 
 
 class _VirtualDiv(PrimitiveWithInfer):

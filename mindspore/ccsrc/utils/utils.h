@@ -1,5 +1,5 @@
 /**
- * Copyright 2019 Huawei Technologies Co., Ltd
+ * Copyright 2019-2021 Huawei Technologies Co., Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,10 @@
 
 namespace mindspore {
 // op name. Op which not exists in operator/ops.h, so define it's name here
+constexpr auto kConcatOpName = "Concat";
 constexpr auto kUniqueOpName = "Unique";
 constexpr auto kComputeAccidentalHitsOpName = "ComputeAccidentalHits";
+constexpr auto kCTCGreedyDecoderOpName = "CTCGreedyDecoder";
 constexpr auto kFour2FiveOpName = "Four2Five";
 constexpr auto kFive2FourOpName = "Five2Four";
 constexpr auto kConv2DOpName = "Conv2D";
@@ -46,6 +48,7 @@ constexpr auto kBNGrad1OpName = "BNGrad1";
 constexpr auto kBNGrad2OpName = "BNGrad2";
 constexpr auto kBNGrad3OpName = "BNGrad3";
 constexpr auto kFusedBatchNormEx = "FusedBatchNormEx";
+constexpr auto kInstanceNorm = "InstanceNorm";
 constexpr auto kFusedBatchNormExWithActivation = "FusedBatchNormExWithActivation";
 constexpr auto kFusedBatchNormExWithAddAndActivation = "FusedBatchNormExWithAddAndActivation";
 constexpr auto kFusedBatchNormGradEx = "FusedBatchNormGradEx";
@@ -290,7 +293,7 @@ constexpr auto kAttrEpsilon = "epsilon";
 constexpr auto kAttrFactor = "factor";
 constexpr auto kAttrIsRef = "isRef";
 constexpr auto kAttrDataShape = "data_shape";
-constexpr auto kAttrDataFormat = "data_format";
+constexpr auto kAttrFormat = "format";
 constexpr auto kAttrAxis = "axis";
 constexpr auto kAttrKeepDims = "keep_dims";
 constexpr auto kAttrShapeGamma = "shape_gamma";
@@ -348,6 +351,7 @@ constexpr auto kAttrPrimitiveTarget = "primitive_target";
 constexpr auto kAttrUseLocking = "use_locking";
 constexpr auto kAttrReduceScatterFlag = "reduce_scatter_flag";
 constexpr auto kAttrOffset = "offset";
+constexpr auto kAttrCacheEnable = "cache_enable";
 constexpr auto kAttrPsKey = "ps_key";
 constexpr auto kAttrOptimizerType = "optim_type";
 constexpr auto kAttrChildGraph = "child_graph";
@@ -370,13 +374,15 @@ constexpr auto kAttrCompileInfo = "compile_info";
 constexpr auto kAttrFusionType = "fusion_type";
 constexpr auto kAttrStride = "stride";
 constexpr auto kAttrStrides = "strides";
-constexpr auto kAttrKsize = "ksize";
 constexpr auto kAttrKernelSize = "kernel_size";
 constexpr auto kAttrDilation = "dilation";
 constexpr auto kAttrPadMode = "pad_mode";
 constexpr auto kAttrPad = "pad";
 constexpr auto kAttrPadding = "padding";
 constexpr auto kAttrIsGrad = "is_grad";
+constexpr auto kAttrRecompute = "recompute";
+constexpr auto kAttrNeedCseAfterRecompute = "need_cse_after_recompute";
+constexpr auto kAttrParallelDimInfo = "parallel_dim_info";
 
 // attr value
 constexpr auto kValueTargetSwitch = "target_switch";
@@ -405,6 +411,7 @@ constexpr auto kFirstBranchInSwitch = 2;
 constexpr auto kCallKernelGraphIndex = 1;
 constexpr auto kSwitchTrueKernelGraphIndex = 2;
 constexpr auto kSwitchFalseKernelGraphIndex = 3;
+constexpr auto kMakeTupleInSwitchLayerIndex = 2;
 // index define of control depend
 constexpr auto kControlDependPriorIndex = 1;
 constexpr auto kControlDependBehindIndex = 2;
@@ -486,9 +493,13 @@ const std::set<std::string> kHWSpecialFormatSet = {
 const std::set<TypeId> kFloatDataTypeSet = {kNumberTypeFloat16, kNumberTypeFloat32};
 
 const std::set<std::string> kComputeDepend = {kUniqueOpName, kComputeAccidentalHitsOpName, kSubAndFilterOpName,
-                                              kPadAndShiftOpName};
+                                              kPadAndShiftOpName, kCTCGreedyDecoderOpName};
 
 const std::set<std::string> k3DFormatSet = {kOpFormat_NCDHW, kOpFormat_NDC1HWC0, kOpFormat_FRACTAL_Z_3D};
+
+const std::set<std::string> DynamicShapeConstInputToAttr = {
+  kCastOpName,      kExpandDimsOpName, kReshapeOpName,   kEmbeddingLookupOpName, kTransposeOpName, kReduceSumOpName,
+  kReduceMinOpName, kReduceMeanOpName, kReduceMaxOpName, kReduceAllOpName,       kReduceAnyOpName, kConcatOpName};
 
 static inline void ChangeFileMode(const std::string &file_name, mode_t mode) {
   try {

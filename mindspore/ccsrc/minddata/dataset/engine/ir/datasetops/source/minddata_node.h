@@ -22,6 +22,7 @@
 #include <string>
 #include <vector>
 
+#include "minddata/dataset/engine/datasetops/source/mindrecord_op.h"
 #include "minddata/dataset/engine/ir/datasetops/dataset_node.h"
 
 namespace mindspore {
@@ -55,7 +56,7 @@ class MindDataNode : public MappableSourceNode {
   /// \brief a base class override function to create the required runtime dataset op objects for this class
   /// \param node_ops - A vector containing shared pointer to the Dataset Ops that this object will create
   /// \return Status Status::OK() if build successfully
-  Status Build(std::vector<std::shared_ptr<DatasetOp>> *node_ops) override;
+  Status Build(std::vector<std::shared_ptr<DatasetOp>> *const node_ops) override;
 
   /// \brief Parameters validation
   /// \return Status Status::OK() if all the parameters are valid
@@ -83,6 +84,25 @@ class MindDataNode : public MappableSourceNode {
   /// \return Status of the function
   Status GetDatasetSize(const std::shared_ptr<DatasetSizeGetter> &size_getter, bool estimate,
                         int64_t *dataset_size) override;
+
+  /// \brief Sampler getter
+  /// \return SamplerObj of the current node
+  std::shared_ptr<SamplerObj> Sampler() override { return sampler_; }
+
+  /// \brief Sampler setter
+  void SetSampler(std::shared_ptr<SamplerObj> sampler) override { sampler_ = sampler; }
+
+  /// \brief Base-class override for accepting IRNodePass visitor
+  /// \param[in] p The node to visit
+  /// \param[out] modified Indicator if the node was modified
+  /// \return Status of the node visit
+  Status Accept(IRNodePass *p, bool *const modified) override;
+
+  /// \brief Base-class override for accepting IRNodePass visitor
+  /// \param[in] p The node to visit
+  /// \param[out] modified Indicator if the node was modified
+  /// \return Status of the node visit
+  Status AcceptAfter(IRNodePass *p, bool *const modified) override;
 
  private:
   std::string dataset_file_;                // search_for_pattern_ will be true in this mode

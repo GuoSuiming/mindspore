@@ -242,6 +242,18 @@ class BatchNorm3d(nn.Cell):
         return bn3d_out
 
 
+class NLLLoss(nn.Cell):
+    """NLLLoss net definition"""
+
+    def __init__(self, reduction):
+        super(NLLLoss, self).__init__()
+        self.nll_loss = P.NLLLoss(reduction=reduction)
+
+    def construct(self, input_x, target, weight):
+        loss = self.nll_loss(input_x, target, weight)
+        return loss
+
+
 class ClipByNorm(nn.Cell):
     """ClipByNorm net definition"""
 
@@ -306,6 +318,42 @@ class CountNonZero(nn.Cell):
     def construct(self, input_x):
         nonzero_num = C.count_nonzero(input_x, self.axis, self.keep_dims, self.dtype)
         return nonzero_num
+
+
+class Mish(nn.Cell):
+    """Mish net definition"""
+
+    def __init__(self):
+        super(Mish, self).__init__()
+        self.mish = P.Mish()
+
+    def construct(self, input_x):
+        out = self.mish(input_x)
+        return out
+
+
+class SeLU(nn.Cell):
+    """Selu net definition"""
+
+    def __init__(self):
+        super(SeLU, self).__init__()
+        self.selu = P.SeLU()
+
+    def construct(self, input_x):
+        out = self.selu(input_x)
+        return out
+
+
+class MulNoNan(nn.Cell):
+    """MulNoNan net definition"""
+
+    def __init__(self):
+        super(MulNoNan, self).__init__()
+        self.mul_no_nan = P.MulNoNan()
+
+    def construct(self, input_x, input_y):
+        out = self.mul_no_nan(input_x, input_y)
+        return out
 
 
 class ScatterUpdate(nn.Cell):
@@ -1253,6 +1301,12 @@ test_case_math_ops = [
         'block': Moments(axis=(), keep_dims=False),
         'desc_inputs': [Tensor(np.random.rand(3, 16, 5, 4).astype(np.float32))],
         'skip': ['backward']}),
+    ('NLLLoss', {
+        'block': NLLLoss(reduction="mean"),
+        'desc_inputs': [Tensor(np.random.rand(3, 16), mstype.float32),
+                        Tensor(np.random.rand(3), mstype.int32),
+                        Tensor(np.random.rand(16), mstype.float32)],
+        'desc_bprop': [(Tensor(np.random.rand(1), mstype.float32), Tensor(np.random.rand(1), mstype.float32))]}),
     ('BatchNorm3d', {
         'block': BatchNorm3d(num_features=3),
         'desc_inputs': [Tensor(np.random.rand(3, 3, 3, 5, 4).astype(np.float32))],
@@ -1297,6 +1351,19 @@ test_case_math_ops = [
                         Tensor(np.array([-6, -1, -2, -3]), mstype.float32),
                         Tensor(np.array([6, 1, 2, 3]), mstype.float32)],
         'desc_bprop': [Tensor(np.random.rand(3, 16, 5, 4), mstype.float32)]}),
+    ('Mish', {
+        'block': Mish(),
+        'desc_inputs': [Tensor(np.random.rand(3, 6, 16, 16), mstype.float32)],
+        'desc_bprop': [Tensor(np.random.rand(3, 6, 16, 16), mstype.float32)]}),
+    ('SeLU', {
+        'block': SeLU(),
+        'desc_inputs': [Tensor(np.random.rand(3, 6, 16, 16), mstype.float32)],
+        'desc_bprop': [Tensor(np.random.rand(3, 6, 16, 16), mstype.float32)]}),
+    ('MulNoNan', {
+        'block': MulNoNan(),
+        'desc_inputs': [Tensor(np.random.rand(3, 6, 16, 16), mstype.float32),
+                        Tensor(np.random.rand(3, 6, 16, 16), mstype.float32)],
+        'desc_bprop': [Tensor(np.random.rand(3, 6, 16, 16), mstype.float32)]}),
     ('Rank', {
         'block': P.Rank(),
         'desc_inputs': [[2, 3]],
@@ -1334,6 +1401,10 @@ test_case_math_ops = [
         'block': P.RealDiv(),
         'desc_inputs': [[4, 5], [2, 3, 4, 5]],
         'desc_bprop': [[2, 3, 4, 5]]}),
+    ('IsFinite', {
+        'block': P.IsFinite(),
+        'desc_inputs': [Tensor(np.random.random((3, 4, 5)).astype(np.float32))],
+        'desc_bprop': [Tensor(np.random.random((3, 4, 5)).astype(np.bool))]}),
     ('Div', {
         'block': P.Div(),
         'desc_inputs': [[4, 5], [2, 3, 4, 5]],
@@ -1617,20 +1688,20 @@ test_case_nn_ops = [
         'desc_inputs': [[1, 3, 4, 4]],
         'desc_bprop': [[1, 3, 4, 4]]}),
     ('MaxPool', {
-        'block': P.MaxPool(ksize=(2, 2), strides=(2, 2), padding="VALID"),
+        'block': P.MaxPool(kernel_size=(2, 2), strides=(2, 2), pad_mode="VALID"),
         'desc_inputs': [[100, 3, 28, 28]],
         'desc_bprop': [[100, 3, 14, 14]]}),
     ('MaxPoolGrad', {
-        'block': G.MaxPoolGrad(ksize=(2, 2), strides=(2, 2), padding="VALID"),
+        'block': G.MaxPoolGrad(kernel_size=(2, 2), strides=(2, 2), pad_mode="VALID"),
         'desc_inputs': [[3, 4, 6, 6], [3, 4, 3, 3], [3, 4, 3, 3]],
         'desc_bprop': [[3, 4, 6, 6]],
         'skip': ['backward']}),
     ('AvgPool', {
-        'block': P.AvgPool(ksize=(2, 2), strides=(2, 2), padding="VALID"),
+        'block': P.AvgPool(kernel_size=(2, 2), strides=(2, 2), pad_mode="VALID"),
         'desc_inputs': [[100, 3, 28, 28]],
         'desc_bprop': [[100, 3, 14, 14]]}),
     ('MaxPoolWithArgmax', {
-        'block': P.MaxPoolWithArgmax(ksize=2, strides=2),
+        'block': P.MaxPoolWithArgmax(kernel_size=2, strides=2),
         'desc_inputs': [[128, 32, 32, 64]],
         'desc_bprop': [[128, 32, 16, 32], ([128, 32, 16, 32], {'dtype': np.int32})]}),
     ('SoftmaxCrossEntropyWithLogits', {
@@ -1690,6 +1761,10 @@ test_case_nn_ops = [
         'desc_inputs': [[20, 20, 10]],
         'desc_bprop': [[20, 20, 5]],
         'skip': ['backward']}),
+    ('Sort', {
+        'block': P.Sort(),
+        'desc_inputs': [[2, 3, 4]],
+        'desc_bprop': [[2, 3, 4], ([2, 3, 4], {'dtype': np.int32})]}),
     ('GatherV2_0', {
         'block': P.GatherV2(),
         'desc_const': [0],
@@ -2196,7 +2271,7 @@ test_case_array_ops = [
         'desc_inputs': [Tensor(np.array([1], np.float32)),
                         Tensor(np.array([1], np.float32)),
                         Tensor(np.array([1], np.float32))],
-        'desc_bprop': [[3, ]]}),
+        'desc_bprop': [[3,]]}),
     ('Pack_0', {
         'block': NetForPackInput(P.Pack()),
         'desc_inputs': [[2, 2], [2, 2], [2, 2]],
@@ -2618,7 +2693,7 @@ test_case_other_ops = [
                         Tensor(np.random.rand(1, 64).astype(np.float16)),
                         Tensor(np.random.rand(1, 64).astype(np.float16)),
                         Tensor(np.random.rand(96, 256).astype(np.float16)),
-                        Tensor(np.random.rand(256, ).astype(np.float16))],
+                        Tensor(np.random.rand(256,).astype(np.float16))],
         'desc_bprop': [Tensor(np.random.rand(1, 64).astype(np.float16)),
                        Tensor(np.random.rand(1, 64).astype(np.float16)),
                        Tensor(np.random.rand(1, 64).astype(np.float16)),

@@ -1,4 +1,4 @@
-# Copyright 2020 Huawei Technologies Co., Ltd
+# Copyright 2020-2021 Huawei Technologies Co., Ltd
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -420,6 +420,19 @@ def get_bprop_sqrt(self):
     return bprop
 
 
+@bprop_getters.register(G.SqrtGrad)
+def get_bprop_sqrt_grad(self):
+    """Grad definition for `SqrtGrad` operation."""
+
+    def bprop(y, grad, out, dout):
+        gy = dout / y
+        dy = -gy * out
+        dgrad = 0.5 * gy
+        return dy, dgrad
+
+    return bprop
+
+
 @bprop_getters.register(P.Rsqrt)
 def get_bprop_rsqrt(self):
     """Grad definition for `Rsqrt` operation."""
@@ -435,22 +448,11 @@ def get_bprop_rsqrt(self):
 @bprop_getters.register(P.Reciprocal)
 def get_bprop_reciprocal(self):
     """Grad definition for `Reciprocal` operation."""
-    if self.target == "GPU":
-        neg = P.Neg()
-        mul = P.Mul()
-        square = P.Square()
-        reciprocal = P.Reciprocal()
+    reciprocal_grad = G.ReciprocalGrad()
 
-        def bprop(x, out, dout):
-            g = neg(reciprocal(square(x)))
-            dx = mul(dout, g)
-            return (dx,)
-    else:
-        reciprocal_grad = G.ReciprocalGrad()
-
-        def bprop(x, out, dout):
-            dx = reciprocal_grad(out, dout)
-            return (dx,)
+    def bprop(x, out, dout):
+        dx = reciprocal_grad(out, dout)
+        return (dx,)
 
     return bprop
 
@@ -765,6 +767,16 @@ def get_bprop_reduce_mean(self):
     return bprop
 
 
+@bprop_getters.register(P.IsFinite)
+def get_bprop_isfinite(self):
+    """Grad definition for `IsFinite` operation."""
+
+    def bprop(x, out, dout):
+        return (zeros_like(x),)
+
+    return bprop
+
+
 @bprop_getters.register(P.Equal)
 def get_bprop_equal(self):
     """Grad definition for `Equal` operation."""
@@ -962,6 +974,19 @@ def get_bprop_asinh(self):
     return bprop
 
 
+@bprop_getters.register(G.AsinhGrad)
+def get_bprop_asinh_grad(self):
+    """Grad definition for `AsinhGrad` operation."""
+    input_grad = G.AsinhGrad()
+    tanh = P.Tanh()
+
+    def bprop(y, grad, out, dout):
+        dy = dout * out * -1.0 * tanh(y)
+        dgrad = input_grad(y, dout)
+        return dy, dgrad
+    return bprop
+
+
 @bprop_getters.register(P.Sinh)
 def get_bprop_sinh(self):
     """Grad definition for `Sinh` operation."""
@@ -1022,6 +1047,20 @@ def get_bprop_acosh(self):
     def bprop(x, out, dout):
         dx = input_grad(out, dout)
         return (dx,)
+
+    return bprop
+
+
+@bprop_getters.register(G.AcoshGrad)
+def get_bprop_acosh_grad(self):
+    """Grad definition for `AcoshGrad` operation."""
+    input_grad = G.AcoshGrad()
+    tanh = P.Tanh()
+
+    def bprop(y, grad, out, dout):
+        dy = dout * out * -1.0 / tanh(y)
+        dgrad = input_grad(y, dout)
+        return dy, dgrad
 
     return bprop
 
@@ -1147,6 +1186,18 @@ def get_bprop_atan(self):
     def bprop(x, out, dout):
         dx = input_grad(x, dout)
         return (dx,)
+    return bprop
+
+
+@bprop_getters.register(G.AtanGrad)
+def get_bprop_atan_grad(self):
+    """Grad definition for `AtanGrad` operation."""
+    input_grad = G.AtanGrad()
+
+    def bprop(x, grad, out, dout):
+        dgrad = input_grad(x, dout)
+        dx = out * dgrad * -2.0 * x
+        return dx, dgrad
     return bprop
 
 

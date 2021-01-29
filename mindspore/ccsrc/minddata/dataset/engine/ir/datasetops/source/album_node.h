@@ -51,7 +51,7 @@ class AlbumNode : public MappableSourceNode {
   /// \brief a base class override function to create the required runtime dataset op objects for this class
   /// \param node_ops - A vector containing shared pointer to the Dataset Ops that this object will create
   /// \return Status Status::OK() if build successfully
-  Status Build(std::vector<std::shared_ptr<DatasetOp>> *node_ops) override;
+  Status Build(std::vector<std::shared_ptr<DatasetOp>> *const node_ops) override;
 
   /// \brief Parameters validation
   /// \return Status Status::OK() if all the parameters are valid
@@ -60,6 +60,18 @@ class AlbumNode : public MappableSourceNode {
   /// \brief Get the shard id of node
   /// \return Status Status::OK() if get shard id successfully
   Status GetShardId(int32_t *shard_id) override;
+
+  /// \brief Getter functions
+  const std::string &DatasetDir() const { return dataset_dir_; }
+  const std::string &SchemaPath() const { return schema_path_; }
+  const std::vector<std::string> &ColumnNames() const { return column_names_; }
+  bool Decode() const { return decode_; }
+  /// \brief Sampler getter
+  /// \return SamplerObj of the current node
+  std::shared_ptr<SamplerObj> Sampler() override { return sampler_; }
+
+  /// \brief Sampler setter
+  void SetSampler(std::shared_ptr<SamplerObj> sampler) override { sampler_ = sampler; }
 
  private:
   std::string dataset_dir_;

@@ -16,6 +16,8 @@
 
 #include "src/runtime/kernel/opencl/opencl_subgraph.h"
 #include <set>
+#include <map>
+#include <string>
 #include "src/runtime/opencl/opencl_executor.h"
 #include "src/runtime/kernel/opencl/utils.h"
 #include "include/errorcode.h"
@@ -169,6 +171,8 @@ int OpenCLSubGraph::GenToFormatOp(const std::vector<lite::Tensor *> &in_tensors,
       parameter = nullptr;
       return RET_ERROR;
     }
+    static int index = 0;
+    in_convert_op->set_name("ToFormat_" + std::to_string(index));
 
     ReplaceOutTensorAndKernelToConvert(in_tensor, in_kernels.at(i), new_tensor, in_convert_op, mem_type);
 
@@ -189,19 +193,7 @@ int OpenCLSubGraph::GenToFormatOp(const std::vector<lite::Tensor *> &in_tensors,
   }
   return RET_OK;
 }
-
-int OpenCLSubGraph::Init() {
-  allocator_ = ocl_runtime_->GetAllocator();
-  MS_LOG(DEBUG) << "input num=" << in_tensors_.size() << ", output num=" << out_tensors_.size();
-  for (const auto tensor : in_tensors_) {
-    MS_ASSERT(tensor);
-    tensor->set_allocator(allocator_);
-  }
-  for (const auto tensor : out_tensors_) {
-    MS_ASSERT(tensor);
-    tensor->set_allocator(allocator_);
-  }
-
+int OpenCLSubGraph::InsertOpsPass() {
   GetInOutNodes();
 
   std::vector<std::vector<kernel::LiteKernel *>> from_kernels_;
@@ -222,12 +214,34 @@ int OpenCLSubGraph::Init() {
   }
   nodes_.insert(nodes_.end(), out_convert_ops_.begin(), out_convert_ops_.end());
   GetInOutNodes();
-  UpdateTensorDataType();
-  Fusion();
+  return RET_OK;
+}
+int OpenCLSubGraph::Init() {
+  allocator_ = ocl_runtime_->GetAllocator();
+  MS_LOG(DEBUG) << "input num=" << in_tensors_.size() << ", output num=" << out_tensors_.size();
+  for (const auto tensor : in_tensors_) {
+    MS_ASSERT(tensor);
+    tensor->set_allocator(allocator_);
+  }
+  for (const auto tensor : out_tensors_) {
+    MS_ASSERT(tensor);
+    tensor->set_allocator(allocator_);
+  }
+  std::map<std::string, std::function<int(void)>> pass_manager{
+    {"InsertOpsPass", std::bind(&OpenCLSubGraph::InsertOpsPass, this)},
+    {"UpdateTensorDataTypePass", std::bind(&OpenCLSubGraph::UpdateTensorDataTypePass, this)},
+    {"FusionPass", std::bind(&OpenCLSubGraph::FusionPass, this)}};
+  for (auto iv : pass_manager) {
+    auto ret = iv.second();
+    if (ret != RET_OK) {
+      MS_LOG(ERROR) << "Run Pass: " << iv.first << " failed.";
+      return RET_ERROR;
+    }
+  }
   return RET_OK;
 }
 
-void OpenCLSubGraph::UpdateTensorDataType() {
+int OpenCLSubGraph::UpdateTensorDataTypePass() {
   bool is_fp16 = ocl_runtime_->GetFp16Enable();
   MS_ASSERT(in_tensors_[0]);
   if (is_fp16 && (in_tensors_[0]->data_type() == kNumberTypeFloat32)) {
@@ -240,11 +254,15 @@ void OpenCLSubGraph::UpdateTensorDataType() {
       for (auto jv : cur_outs) {
         if (out_set.count(jv) == 0) {
           MS_ASSERT(jv);
-          jv->set_data_type(kNumberTypeFloat16);
+          // if Fp16Enable, only change fp32 to fp16, other dtype is reserved
+          if (jv->data_type() == kNumberTypeFloat32) {
+            jv->set_data_type(kNumberTypeFloat16);
+          }
         }
       }
     }
   }
+  return RET_OK;
 }
 
 void OpenCLSubGraph::GetKernelFromToTensor(const std::vector<lite::Tensor *> &in_tensors,
@@ -289,16 +307,44 @@ void OpenCLSubGraph::GetInOutNodes() {
   }
 }
 
+bool OpenCLSubGraph::IsSubGraphInferShapeDone() {
+  for (auto node : this->nodes_) {
+    auto opencl_kernel = reinterpret_cast<kernel::OpenCLKernel *>(node);
+    if (!opencl_kernel->GetInferShapeFlag()) {
+      return false;
+    }
+  }
+  return true;
+}
+
 int OpenCLSubGraph::Prepare() {
   executor_ = new (std::nothrow) lite::opencl::OpenCLExecutor();
   if (executor_ == nullptr) {
     MS_LOG(ERROR) << "Create OpenCLExecutor fail";
     return RET_ERROR;
   }
-  auto ret = SubGraphKernel::Prepare();
-  if (ret != RET_OK) {
-    MS_LOG(ERROR) << "OpenCL prepare fail";
-    return ret;
+  auto ret = RET_OK;
+  for (auto node : this->nodes_) {
+    if (node == nullptr) {
+      MS_LOG(ERROR) << "node in Subgraph is nullptr";
+      return mindspore::lite::RET_NULL_PTR;
+    }
+    auto opencl_kernel = reinterpret_cast<kernel::OpenCLKernel *>(node);
+    std::set<int> pre_init_weight_list = {schema::PrimitiveType_MatMul, schema::PrimitiveType_BiasAdd};
+    if (pre_init_weight_list.find(opencl_kernel->Type()) != pre_init_weight_list.end()) {
+      ret = opencl_kernel->InitWeights();
+      if (ret != RET_OK) {
+        MS_LOG(ERROR) << "init weights " << node->name() << " failed";
+        return ret;
+      }
+    }
+    if (opencl_kernel->GetInferShapeFlag()) {
+      ret = node->Prepare();
+      if (ret != RET_OK) {
+        MS_LOG(ERROR) << "prepare node " << node->name() << " failed";
+        return ret;
+      }
+    }
   }
   auto opencl_exec = reinterpret_cast<lite::opencl::OpenCLExecutor *>(executor_);
   // If tuning_mode is DEFAULT, just malloc memory for reuse.
@@ -328,7 +374,40 @@ void OpenCLSubGraph::UnInit() {
   delete this->executor_;
 }
 
-int OpenCLSubGraph::ReSize() { return RET_OK; }
+int OpenCLSubGraph::ReSize() { return ReSize(false); }
+
+int OpenCLSubGraph::ReSize(bool interrupt) {
+  for (auto kernel : nodes_) {
+    if (kernel == nullptr) {
+      MS_LOG(ERROR) << "input kernel is nullptr!";
+      return RET_ERROR;
+    }
+    auto opencl_kernel = reinterpret_cast<kernel::OpenCLKernel *>(kernel);
+    if (kernel->subgraph_type() != kernel::kNotSubGraph) {
+      MS_LOG(ERROR) << "all nodes in should be kernel";
+      return RET_ERROR;
+    }
+    std::vector<lite::Tensor *> inputs = kernel->in_tensors();
+    std::vector<lite::Tensor *> outputs = kernel->out_tensors();
+    for (auto &output : outputs) {
+      output->FreeData();
+    }
+    opencl_kernel->SetInferShapeFlag(false);
+  }
+  for (auto kernel : nodes_) {
+    auto opencl_kernel = reinterpret_cast<kernel::OpenCLKernel *>(kernel);
+    auto ret = opencl_kernel->ReSize();
+    if (ret != RET_OK) {
+      MS_LOG(WARNING) << "ReSize " << opencl_kernel->name() << "failed!";
+      if (interrupt) {
+        return ret;
+      } else {
+        break;
+      }
+    }
+  }
+  return RET_OK;
+}
 
 int OpenCLSubGraph::Run() {
   if (executor_ == nullptr) {

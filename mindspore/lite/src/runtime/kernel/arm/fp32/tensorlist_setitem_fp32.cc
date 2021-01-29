@@ -28,15 +28,20 @@ using mindspore::schema::PrimitiveType_TensorListSetItem;
 
 namespace mindspore::kernel {
 
-int TensorListSetItemCPUKernel::Init() { return RET_OK; }
+int TensorListSetItemCPUKernel::Init() {
+#ifdef ENABLE_FP16
+  if (lite::IsSupportFloat16() && context_->IsCpuFloat16Enabled() && dtype_ == kNumberTypeFloat32) {
+    dtype_ = kNumberTypeFloat16;
+  }
+#endif
+  return RET_OK;
+}
 
-int TensorListSetItemCPUKernel::Run() {
-  input0_ = reinterpret_cast<lite::TensorList *>(in_tensors_[0]);
-  if (dtype_ != input0_->tensors_data_type()) {
+int TensorListSetItemCPUKernel::CheckParam() {
+  if (dtype_ != kTypeUnknown && dtype_ != input0_->tensors_data_type()) {
     MS_LOG(ERROR) << "op dtype:" << dtype_ << " is not equal in_tensors[0] dtype:" << input0_->data_type();
     return RET_ERROR;
   }
-  int dim0 = input0_->ElementsNum() - 1;
   if (in_tensors_[1]->data_type() != kNumberTypeInt && in_tensors_[1]->data_type() != kNumberTypeInt32) {
     MS_LOG(ERROR) << "in_tensors_[1]->data_type():" << in_tensors_[1]->data_type() << " must be int";
     return RET_ERROR;
@@ -45,10 +50,38 @@ int TensorListSetItemCPUKernel::Run() {
     MS_LOG(ERROR) << "in_tensors_[1]->ElementsNum():" << in_tensors_[1]->ElementsNum() << " must be equal to 1!";
     return RET_ERROR;
   }
+  return RET_OK;
+}
+
+int TensorListSetItemCPUKernel::IncrementOutputSize(int origin_size) {
+  output0_ = reinterpret_cast<lite::TensorList *>(out_tensors_[0]);
+  int new_tensors_size = origin_size + 1;
+  output0_->set_shape({new_tensors_size});
+  std::vector<std::vector<int>> out_shape;
+  out_shape.resize(new_tensors_size, in_tensors_[2]->shape());
+  auto ret = output0_->MallocTensorListData(in_tensors_[2]->data_type(), out_shape);
+  if (ret != RET_OK) {
+    MS_LOG(ERROR) << "increment output size malloc tensorlist data error";
+    return ret;
+  }
+  return RET_OK;
+}
+
+int TensorListSetItemCPUKernel::Run() {
+  input0_ = reinterpret_cast<lite::TensorList *>(in_tensors_[0]);
+
+  if (CheckParam() != RET_OK) {
+    MS_LOG(ERROR) << "check param failed.";
+    return RET_ERROR;
+  }
+
+  int dim0 = input0_->ElementsNum() - 1;
   index_ = reinterpret_cast<int *>(in_tensors_[1]->data_c())[0];
   if (index_ < 0 || index_ > dim0) {
-    MS_LOG(ERROR) << "index tensor:[" << index_ << "] must be in [0, " << dim0 << "]!";
-    return RET_ERROR;
+    if (IncrementOutputSize(output0_->shape()[0]) != RET_OK) {
+      MS_LOG(ERROR) << "Resizeoutput Error ,index tensor:[" << index_ << "] must be in [0, " << dim0 << "]!";
+      return RET_ERROR;
+    }
   }
   input2_ = in_tensors_[2];
   MS_ASSERT(input2_ != nullptr);
@@ -57,7 +90,18 @@ int TensorListSetItemCPUKernel::Run() {
   }
   output0_ = reinterpret_cast<lite::TensorList *>(out_tensors_[0]);
   MS_ASSERT(output0_ != nullptr);
+  // new loop count
+  if (output0_->tensors().empty() && input0_->tensors().empty()) {
+    if (IncrementOutputSize(0) != RET_OK) {
+      MS_LOG(ERROR) << "Resizeoutput Error!";
+      return RET_ERROR;
+    }
+  }
   // copy each tensor in tensors_
+  if (input0_->tensors().empty() && index_ == 0) {
+    input0_->set_element_shape(input2_->shape());
+    output0_->set_element_shape(input2_->shape());
+  }
   for (int i = 0; i < output0_->ElementsNum(); ++i) {
     if (i == index_) {
       auto dst = output0_->GetTensor(i);
@@ -83,12 +127,15 @@ int TensorListSetItemCPUKernel::Run() {
       auto src = input0_->GetTensor(i);
       auto dst = output0_->GetTensor(i);
       MS_ASSERT(src != nullptr);
-      MS_ASSERT(dst != nullptr);
+      // merge move data will delete tensors
+      if (dst == nullptr) {
+        dst = lite::Tensor::CopyTensor(*src, src->data_c() != nullptr);
+        auto &tensors = output0_->tensors();
+        tensors.emplace_back(dst);
+        continue;
+      }
+
       if (src->data_type() != kTypeUnknown) {
-        if (src->Size() != dst->Size()) {
-          MS_LOG(ERROR) << "src->Size():" << src->Size() << " must be equal to dst->Size():" << dst->Size();
-          return RET_ERROR;
-        }
         auto ret = lite::Tensor::CopyTensorData(*src, dst);
         if (ret != RET_OK) {
           MS_LOG(ERROR) << "CopyTensorData[" << i << "] is failed!";
@@ -103,5 +150,6 @@ int TensorListSetItemCPUKernel::Run() {
 int TensorListSetItemCPUKernel::ReSize() { return RET_OK; }
 
 REG_KERNEL(kCPU, kNumberTypeFloat32, PrimitiveType_TensorListSetItem, LiteKernelCreator<TensorListSetItemCPUKernel>)
+REG_KERNEL(kCPU, kNumberTypeFloat16, PrimitiveType_TensorListSetItem, LiteKernelCreator<TensorListSetItemCPUKernel>)
 REG_KERNEL(kCPU, kNumberTypeInt32, PrimitiveType_TensorListSetItem, LiteKernelCreator<TensorListSetItemCPUKernel>)
 }  // namespace mindspore::kernel

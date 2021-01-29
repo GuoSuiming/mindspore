@@ -20,6 +20,7 @@
 #include <vector>
 #include "include/errorcode.h"
 #include "nnacl/fp32/transpose_fp32.h"
+#include "nnacl/transpose.h"
 #include "src/lite_kernel.h"
 #include "src/kernel_registry.h"
 
@@ -35,6 +36,7 @@ class TransposeCPUKernel : public LiteKernel {
   int Init() override;
   int ReSize() override;
   int Run() override;
+  int NhNcTranspose(lite::Tensor *in_tensor, lite::Tensor *out_tensor, TransposeParameter *param);
 
  protected:
   float *in_data_ = nullptr;

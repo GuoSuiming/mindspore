@@ -1,5 +1,5 @@
 /**
- * Copyright 2019 Huawei Technologies Co., Ltd
+ * Copyright 2021 Huawei Technologies Co., Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -168,6 +168,7 @@ AbstractBasePtr InferImplUnique(const AnalysisEnginePtr &, const PrimitivePtr &p
   if (max_shape.empty()) {
     max_shape = shape->shape();
   }
+
   auto ids =
     std::make_shared<AbstractTensor>(input->element(), std::make_shared<Shape>(ids_shape, min_shape, max_shape));
   // Currently we choose the same data type as input for the idx.
@@ -186,6 +187,7 @@ AbstractBasePtr InferImplUnique(const AnalysisEnginePtr &, const PrimitivePtr &p
   if (idx_max_shape.empty()) {
     idx_max_shape = shape->shape();
   }
+
   auto ids_idx = std::make_shared<AbstractTensor>(ids_idx_type, idx_shape);
   ids_idx->set_shape(std::make_shared<Shape>(idx_shape, idx_min_shape, idx_max_shape));
   // outputs: ids, ids_idx
@@ -950,6 +952,121 @@ AbstractBasePtr InferImplSequenceMask(const AnalysisEnginePtr &, const Primitive
 
   ShapePtr output_shape = std::make_shared<Shape>(lengths_shape, lengths_shape_min, lengths_shape_max);
   return std::make_shared<AbstractTensor>(kBool, output_shape);
+}
+
+AbstractBasePtr InferImplConcat(const AnalysisEnginePtr &, const PrimitivePtr &primitive,
+                                const AbstractBasePtrList &args_spec_list) {
+  MS_EXCEPTION_IF_NULL(primitive);
+  const std::string op_name = primitive->name();
+  if (args_spec_list.empty()) {
+    MS_LOG(EXCEPTION) << "args_spec_list is empty.";
+  }
+
+  AbstractTuplePtr arg = nullptr;
+  AbstractTensorPtr tensor_base = nullptr;
+  size_t tuple_len = 0;
+  MS_EXCEPTION_IF_NULL(args_spec_list[0]);
+  if (args_spec_list[0]->isa<AbstractTuple>()) {
+    CheckArgsSize(op_name, args_spec_list, 1);
+    arg = CheckArg<AbstractTuple>(op_name, args_spec_list, 0);
+    tuple_len = arg->elements().size();
+    tensor_base = CheckArg<AbstractTensor>(op_name, arg->elements(), 0);
+  } else if (args_spec_list[0]->isa<AbstractTensor>()) {
+    tuple_len = args_spec_list.size();
+    tensor_base = CheckArg<AbstractTensor>(op_name, args_spec_list, 0);
+  }
+
+  MS_EXCEPTION_IF_NULL(tensor_base);
+  ShapeVector shape_base = tensor_base->shape()->shape();
+  int64_t rank_base = SizeToLong(shape_base.size());
+  ShapeVector min_shape_base = tensor_base->shape()->min_shape();
+  ShapeVector max_shape_base = tensor_base->shape()->max_shape();
+  (void)CheckMinMaxShape(shape_base, &min_shape_base, &max_shape_base);
+
+  primitive->set_attr("T", tensor_base->element()->BuildType());
+  primitive->set_attr("inputNums", MakeValue(SizeToLong(tuple_len)));
+
+  ValuePtr axis = primitive->GetAttr("axis");
+  // Axis value should be in [-(rank_base + 1), rank_base).
+  int64_t axis_value = CheckAxis(op_name, axis, -(rank_base + 1), rank_base);
+  // If axis is negative, add offset(rank_base) to turn it to positive.
+  axis_value = GetPositiveAxis(axis_value, LongToSize(rank_base));
+
+  int64_t all_shp = shape_base[axis_value];
+  int64_t min_all_shp = min_shape_base[axis_value];
+  int64_t max_all_shp = max_shape_base[axis_value];
+  for (size_t i = 1; i < tuple_len; ++i) {
+    AbstractTensorPtr tensor = nullptr;
+    if (args_spec_list[0]->isa<AbstractTuple>()) {
+      tensor = CheckArg<AbstractTensor>(op_name, arg->elements(), i);
+    } else if (args_spec_list[0]->isa<AbstractTensor>()) {
+      tensor = CheckArg<AbstractTensor>(op_name, args_spec_list, i);
+    }
+    ShapeVector shape_tensor = tensor->shape()->shape();
+    int64_t rank_tensor = SizeToLong(shape_tensor.size());
+    ShapeVector min_shape_tensor = tensor->shape()->min_shape();
+    ShapeVector max_shape_tensor = tensor->shape()->max_shape();
+    (void)CheckMinMaxShape(shape_tensor, &min_shape_tensor, &max_shape_tensor);
+    (void)CheckDtypeSame(op_name, tensor_base, tensor);
+    if (rank_tensor != rank_base) {
+      MS_LOG(EXCEPTION) << op_name << " can not concat element " << i << " with the first element: Wrong Rank";
+    }
+    for (int j = 0; j < rank_base; ++j) {
+      if (j != axis_value && shape_tensor[j] != shape_base[j]) {
+        MS_LOG(EXCEPTION) << op_name << " can not concat element " << i << " with the first element: Wrong Size";
+      }
+    }
+    if (all_shp == -1 || shape_base[axis_value] == -1) {
+      all_shp = -1;
+    } else {
+      all_shp += shape_tensor[axis_value];
+    }
+    min_all_shp += min_shape_tensor[axis_value];
+    max_all_shp += max_shape_tensor[axis_value];
+  }
+
+  AbstractTensorPtr ret = dyn_cast<AbstractTensor>(tensor_base->Broaden());
+  MS_EXCEPTION_IF_NULL(ret);
+  auto shape = ret->shape()->shape();
+  auto min_shape = ret->shape()->min_shape();
+  auto max_shape = ret->shape()->max_shape();
+  (void)CheckMinMaxShape(shape, &min_shape, &max_shape);
+  shape[axis_value] = all_shp;
+  min_shape[axis_value] = min_all_shp;
+  max_shape[axis_value] = max_all_shp;
+  ret->set_shape(std::make_shared<Shape>(shape, min_shape, max_shape));
+  return ret;
+}
+
+AbstractBasePtr InferImplRange(const AnalysisEnginePtr &, const PrimitivePtr &primitive,
+                               const AbstractBasePtrList &args_spec_list) {
+  const std::string &op_name = primitive->name();
+  CheckArgsSize(op_name, args_spec_list, 3);
+  AbstractTensorPtr range_start = CheckArg<AbstractTensor>(op_name, args_spec_list, 0);
+  AbstractTensorPtr range_end = CheckArg<AbstractTensor>(op_name, args_spec_list, 1);
+  AbstractTensorPtr range_delta = CheckArg<AbstractTensor>(op_name, args_spec_list, 2);
+
+  TypePtrList supported_types = {kInt64, kInt32, kFloat32, kFloat64};
+  TypePtr range_start_type = CheckTensorDType(range_start, supported_types, "range_start input of Range should be %s");
+  TypePtr range_end_type = CheckTensorDType(range_end, supported_types, "range_start input of Range should be %s");
+  TypePtr range_delta_type = CheckTensorDType(range_delta, supported_types, "range_start input of Range should be %s");
+
+  // check all 3 inputs are same type
+  if (!IsIdentidityOrSubclass(range_start_type, range_end_type) ||
+      !IsIdentidityOrSubclass(range_end_type, range_delta_type)) {
+    MS_LOG(EXCEPTION) << "All inputs must have same type, but got: " << args_spec_list[0]->type_name() << ", "
+                      << args_spec_list[1]->type_name() << ", and " << args_spec_list[2]->type_name();
+  }
+
+  int64_t max_output_length = -1;
+  ValuePtr max_output_length_ptr = primitive->GetAttr("maxlen");
+  max_output_length = GetValue<int64_t>(max_output_length_ptr);
+  ShapeVector output_shape = {Shape::SHP_ANY};
+  ShapeVector min_shape = {1};
+  ShapeVector max_shape = {max_output_length};
+  ShapePtr shape = std::make_shared<Shape>(output_shape, min_shape, max_shape);
+
+  return std::make_shared<AbstractTensor>(range_start_type, shape);
 }
 }  // namespace abstract
 }  // namespace mindspore

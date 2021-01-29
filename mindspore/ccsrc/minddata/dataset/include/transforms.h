@@ -17,11 +17,30 @@
 #ifndef MINDSPORE_CCSRC_MINDDATA_DATASET_INCLUDE_TRANSFORMS_H_
 #define MINDSPORE_CCSRC_MINDDATA_DATASET_INCLUDE_TRANSFORMS_H_
 
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
+
 #include "minddata/dataset/include/constants.h"
 #include "minddata/dataset/include/status.h"
+
+#ifndef INCLUDE_NLOHMANN_JSON_FWD_HPP_
+#define INCLUDE_NLOHMANN_JSON_FWD_HPP_
+namespace nlohmann {
+template <typename T = void, typename SFINAE = void>
+struct adl_serializer;
+template <template <typename U, typename V, typename... Args> class ObjectType = std::map,
+          template <typename U, typename... Args> class ArrayType = std::vector, class StringType = std::string,
+          class BooleanType = bool, class NumberIntegerType = std::int64_t, class NumberUnsignedType = std::uint64_t,
+          class NumberFloatType = double, template <typename U> class AllocatorType = std::allocator,
+          template <typename T, typename SFINAE = void> class JSONSerializer = adl_serializer>
+class basic_json;
+template <typename BasicJsonType>
+class json_pointer;
+using json = basic_json<>;
+}  // namespace nlohmann
+#endif  // INCLUDE_NLOHMANN_JSON_FWD_HPP_
 
 namespace mindspore {
 namespace dataset {
@@ -62,6 +81,8 @@ class TensorOperation : public std::enable_shared_from_this<TensorOperation> {
   /// \brief Check whether the operation is deterministic.
   /// \return true if this op is a random op (returns non-deterministic result e.g. RandomCrop)
   bool IsRandomOp() const { return random_op_; }
+
+  virtual Status to_json(nlohmann::json *out_json) { return Status::OK(); }
 
  protected:
   bool random_op_;
@@ -204,7 +225,9 @@ class PreBuiltOperation : public TensorOperation {
 
   Status ValidateParams() override;
 
-  std::string Name() const override { return kPreBuiltOperation; }
+  std::string Name() const override;
+
+  Status to_json(nlohmann::json *out_json) override;
 
  private:
   std::shared_ptr<TensorOp> op_;

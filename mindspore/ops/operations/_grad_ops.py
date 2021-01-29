@@ -354,8 +354,9 @@ class Conv3DBackpropFilter(PrimitiveWithInfer):
         if isinstance(pad, int):
             pad = (pad,) * 6
         validator.check_equal_int(len(pad), 6, 'pad size', self.name)
+        self.add_prim_attr('pad', self.pad)
         self.pad_list = pad
-        self.add_prim_attr('pads', self.pad_list)
+        self.add_prim_attr('pad_list', self.pad_list)
 
         self.pad_mode = validator.check_string(pad_mode.lower(), ['valid', 'same', 'pad'], 'pad_mode', self.name)
         if self.pad_mode != 'pad' and self.pad_list != (0, 0, 0, 0, 0, 0):
@@ -415,7 +416,7 @@ class Conv3DBackpropFilter(PrimitiveWithInfer):
             pad_right = pad_needed_w - pad_left
             self.pad_list = (pad_head, pad_tail, pad_top, pad_bottom, pad_left, pad_right)
 
-        self.add_prim_attr('pads', self.pad_list)
+        self.add_prim_attr('pad_list', self.pad_list)
         out = {
             'value': None,
             'shape': w_size_v,
@@ -432,7 +433,10 @@ class Conv2DBackpropFilter(PrimitiveWithInfer):
         out_channel (int): The dimensionality of the output space.
         kernel_size (Union[int, tuple[int]]): The size of the convolution window.
         pad_mode (str): Modes to fill padding. It could be "valid", "same", or "pad". Default: "valid".
-        pad (int): The pad value to be filled. Default: 0.
+        pad (Union(int, tuple[int])): The pad value to be filled. Default: 0. If `pad` is an integer, the paddings of
+                    top, bottom, left and right are the same, equal to pad. If `pad` is a tuple of four integers, the
+                    padding of top, bottom, left and right equal to pad[0], pad[1], pad[2], and pad[3] correspondingly.
+        pad_list (tuple): The pad list like (top, bottom, left, right). Default: (0, 0, 0, 0).
         mode (int): Modes for different convolutions. 0 Math convolutiuon, 1 cross-correlation convolution ,
                     2 deconvolution, 3 depthwise convolution. Default: 1.
         stride (tuple): The stride to be applied to the convolution filter. Default: (1, 1).
@@ -464,7 +468,11 @@ class Conv2DBackpropFilter(PrimitiveWithInfer):
         self.mode = mode
         pad_mode = pad_mode.upper()
         self.add_prim_attr('pad_mode', pad_mode)
-        self.pad = pad
+        if isinstance(pad, int):
+            pad = (pad,) * 4
+        else:
+            validator.check_equal_int(len(pad), 4, 'pad size', self.name)
+        self.add_prim_attr("pad", pad)
         if isinstance(stride, tuple) and len(stride) == 4:
             self.stride = (stride[2], stride[3])
             self.add_prim_attr('stride', self.stride)
@@ -501,13 +509,15 @@ class DepthwiseConv2dNativeBackpropFilter(PrimitiveWithInfer):
     Refer to class DepthwiseConv2dNative for more details.
 
     Args:
-        channel_multiplier (int): The multipiler for the original output conv.
+        channel_multiplier (int): The multiplier for the original output conv.
         kernel_size (int or tuple): The size of the conv kernel.
         mode (int): Modes for different convolutions. 0 Math convolutiuon, 1 cross-correlation convolution,
-                       2 deconvolution,3 depthwise convolution. Defaul: 3.
+                       2 deconvolution,3 depthwise convolution. Default: 3.
         pad_mode (str): The mode to fill padding which can be: "valid", "same" or "pad". Default: "valid".
-        pad (int): The pad value to be filled. Default: 0.
-        pads (tuple): The pad list like (top, bottom, left, right). Default: (0, 0, 0, 0).
+        pad (Union(int, tuple[int])): The pad value to be filled. Default: 0. If `pad` is an integer, the paddings of
+                    top, bottom, left and right are the same, equal to pad. If `pad` is a tuple of four integers, the
+                    padding of top, bottom, left and right equal to pad[0], pad[1], pad[2], and pad[3] correspondingly.
+        pad_list (tuple): The pad list like (top, bottom, left, right). Default: (0, 0, 0, 0).
         stride (int): The stride to be applied to the convolution filter. Default: 1.
         dilation (int): Specifies the space to use between kernel elements. Default: 1.
         group (int): Splits input into groups. Default: 1.
@@ -522,7 +532,7 @@ class DepthwiseConv2dNativeBackpropFilter(PrimitiveWithInfer):
                  kernel_size,
                  pad_mode="valid",
                  pad=0,
-                 pads=(0, 0, 0, 0),
+                 pad_list=(0, 0, 0, 0),
                  mode=3,
                  stride=1,
                  dilation=1,
@@ -533,8 +543,12 @@ class DepthwiseConv2dNativeBackpropFilter(PrimitiveWithInfer):
         self.kernel_size = kernel_size
         self.mode = mode
         self.pad_mode = pad_mode
-        self.pad = pad
-        self.pads = pads
+        if isinstance(pad, int):
+            pad = (pad,) * 4
+        else:
+            validator.check_equal_int(len(pad), 4, 'pad size', self.name)
+        self.add_prim_attr("pad", pad)
+        self.pad_list = pad_list
         self.stride = stride
         self.dilation = dilation
         self.group = group
@@ -562,13 +576,15 @@ class DepthwiseConv2dNativeBackpropInput(PrimitiveWithInfer):
     Applies depthwise conv2d for the input, which will generate more channels with channel_multiplier.
 
     Args:
-        channel_multiplier (int): The multipiler for the original output conv.
+        channel_multiplier (int): The multiplier for the original output conv.
         kernel_size (int or tuple): The size of the conv kernel.
         mode (int): Modes for different convolutions. 0 Math convolutiuon, 1 cross-correlation convolution ,
                     2 deconvolution,3 depthwise convolution. Default: 3.
         pad_mode (str):  Modes to fill padding. It could be "valid", "same", or "pad". Default: "valid".
-        pad (int): The pad value to be filled. Default: 0.
-        pads (tuple): The pad list like (top, bottom, left, right). Default: (0, 0, 0, 0).
+        pad (Union(int, tuple[int])): The pad value to be filled. Default: 0. If `pad` is an integer, the paddings of
+                    top, bottom, left and right are the same, equal to pad. If `pad` is a tuple of four integers, the
+                    padding of top, bottom, left and right equal to pad[0], pad[1], pad[2], and pad[3] correspondingly.
+        pad_list (tuple): The pad list like (top, bottom, left, right). Default: (0, 0, 0, 0).
         stride (int): The stride to be applied to the convolution filter. Default: 1.
         dilation (int): Specifies the space to use between kernel elements. Default: 1.
         group (int): Splits input into groups. Default: 1.
@@ -583,7 +599,7 @@ class DepthwiseConv2dNativeBackpropInput(PrimitiveWithInfer):
                  kernel_size,
                  pad_mode="valid",
                  pad=0,
-                 pads=(0, 0, 0, 0),
+                 pad_list=(0, 0, 0, 0),
                  mode=3,
                  stride=1,
                  dilation=1,
@@ -594,8 +610,12 @@ class DepthwiseConv2dNativeBackpropInput(PrimitiveWithInfer):
         self.kernel_size = kernel_size
         self.mode = mode
         self.pad_mode = pad_mode
-        self.pad = pad
-        self.pads = pads
+        if isinstance(pad, int):
+            pad = (pad,) * 4
+        else:
+            validator.check_equal_int(len(pad), 4, 'pad size', self.name)
+        self.add_prim_attr("pad", pad)
+        self.pad_list = pad_list
         self.stride = stride
         self.dilation = dilation
         self.group = group
@@ -714,6 +734,21 @@ class FusedBatchNormGradEx(PrimitiveWithInfer):
         return (x_type, scale_type, scale_type)
 
 
+class InstanceNormGrad(PrimitiveWithInfer):
+    """Gradients of InstanceNorm operation."""
+
+    @prim_attr_register
+    def __init__(self, is_training=True, epsilon=0.0, momentum=0.1):
+        self.init_prim_io_names(inputs=['dy', 'x', 'gamma', 'save_mean', 'save_variance'],
+                                outputs=['dx', 'bn_gamma', 'bn_beta'])
+
+    def infer_shape(self, y_backprop_shape, x_shape, gamma_shape, save_mean_shape, save_variance_shape):
+        return (x_shape, gamma_shape, gamma_shape)
+
+    def infer_dtype(self, y_backprop_type, x_type, gamma_type, save_mean_type, save_variance_type):
+        return (x_type, gamma_type, gamma_type)
+
+
 class UniqueGrad(Primitive):
     """Gradients of Unique operation."""
 
@@ -795,13 +830,13 @@ class _PoolGrad(PrimitiveWithInfer):
     """Gradients of the max/avg pool operation."""
 
     @prim_attr_register
-    def __init__(self, ksize, strides, padding="VALID", data_format="NCHW"):
+    def __init__(self, kernel_size, strides, pad_mode="VALID", data_format="NCHW"):
         self.init_prim_io_names(inputs=['x_origin', 'out_origin', 'grad'], outputs=['output'])
 
-        validator.check_value_type('ksize', ksize, [int, tuple], self.name)
+        validator.check_value_type('kernel_size', kernel_size, [int, tuple], self.name)
         validator.check_value_type('strides', strides, [int, tuple], self.name)
-        self.padding = validator.check_string(padding.upper(), ['VALID', 'SAME'], 'padding', self.name)
-        self.add_prim_attr("padding", self.padding)
+        self.pad_mode = validator.check_string(pad_mode.upper(), ['VALID', 'SAME'], 'pad_mode', self.name)
+        self.add_prim_attr("pad_mode", self.pad_mode)
         self.format = validator.check_string(data_format, ['NCHW', 'NHWC'], 'format', self.name)
         if context.get_context("device_target") != "GPU" and self.format == "NHWC":
             raise ValueError("NHWC format only support in GPU target.")
@@ -827,9 +862,10 @@ class _PoolGrad(PrimitiveWithInfer):
                     raise error_msg
             return ret
 
-        ksize = _grad_check_int_or_tuple("ksize", ksize, self.is_maxpoolgradwithargmax)
-        self.ksize = ksize if self.format == "NCHW" else [ksize[0], ksize[2], ksize[3], ksize[1]]
-        self.add_prim_attr("ksize", self.ksize)
+        kernel_size = _grad_check_int_or_tuple("kernel_size", kernel_size, self.is_maxpoolgradwithargmax)
+        self.kernel_size = kernel_size if self.format == "NCHW" else [kernel_size[0], kernel_size[2],
+                                                                      kernel_size[3], kernel_size[1]]
+        self.add_prim_attr("kernel_size", self.kernel_size)
 
         strides = _grad_check_int_or_tuple("strides", strides, self.is_maxpoolgradwithargmax)
         self.strides = strides if self.format == "NCHW" else [strides[0], strides[2], strides[3], strides[1]]
@@ -840,8 +876,8 @@ class AvgPoolGrad(_PoolGrad):
     """Gradients of the avg pool operation for ge."""
 
     @prim_attr_register
-    def __init__(self, ksize=1, strides=1, padding="VALID"):
-        super(AvgPoolGrad, self).__init__(ksize, strides, padding)
+    def __init__(self, kernel_size=1, strides=1, pad_mode="VALID"):
+        super(AvgPoolGrad, self).__init__(kernel_size, strides, pad_mode)
 
     def __infer__(self, origin_input, dout):
         out = {
@@ -857,8 +893,8 @@ class AvgPoolGradVm(_PoolGrad):
     """Gradients of the avg pool operation for vm."""
 
     @prim_attr_register
-    def __init__(self, ksize=1, strides=1, padding="VALID"):
-        super(AvgPoolGradVm, self).__init__(ksize, strides, padding)
+    def __init__(self, kernel_size=1, strides=1, pad_mode="VALID"):
+        super(AvgPoolGradVm, self).__init__(kernel_size, strides, pad_mode)
         self.init_prim_io_names(inputs=['x_origin', 'grad', 'mean_matrix', 'kernel_matrix'], outputs=['output'])
 
     def __infer__(self, origin_input, dout, mean_matrix, kernel_matrix):
@@ -875,8 +911,8 @@ class AvgPoolGradGpu(_PoolGrad):
     """Gradients of the avg pool operation for gpu."""
 
     @prim_attr_register
-    def __init__(self, ksize=1, strides=1, padding="VALID", data_format="NCHW"):
-        super(AvgPoolGradGpu, self).__init__(ksize, strides, padding, data_format)
+    def __init__(self, kernel_size=1, strides=1, pad_mode="VALID", data_format="NCHW"):
+        super(AvgPoolGradGpu, self).__init__(kernel_size, strides, pad_mode, data_format)
 
     def infer_shape(self, x1_shape, x2_shape, grad_shape):
         return x1_shape
@@ -889,8 +925,8 @@ class AvgPoolGradCpu(_PoolGrad):
     """Gradients of the avg pool operation for cpu."""
 
     @prim_attr_register
-    def __init__(self, ksize=1, strides=1, padding="VALID", data_format="NCHW"):
-        super(AvgPoolGradCpu, self).__init__(ksize, strides, padding, data_format)
+    def __init__(self, kernel_size=1, strides=1, pad_mode="VALID", data_format="NCHW"):
+        super(AvgPoolGradCpu, self).__init__(kernel_size, strides, pad_mode, data_format)
 
     def infer_shape(self, x1_shape, x2_shape, grad_shape):
         return x1_shape
@@ -903,8 +939,8 @@ class MaxPoolGrad(_PoolGrad):
     """Performs gradients of the max pool operation."""
 
     @prim_attr_register
-    def __init__(self, ksize=1, strides=1, padding="VALID", data_format="NCHW"):
-        super(MaxPoolGrad, self).__init__(ksize, strides, padding, data_format)
+    def __init__(self, kernel_size=1, strides=1, pad_mode="VALID", data_format="NCHW"):
+        super(MaxPoolGrad, self).__init__(kernel_size, strides, pad_mode, data_format)
 
     def infer_shape(self, x1_shape, x2_shape, grad_shape):
         return x1_shape
@@ -918,13 +954,13 @@ class MaxPoolGradGrad(_PoolGrad):
     Performs gradients of the MaxPoolGrad operation.
 
     Args:
-        ksize (Union[int, tuple[int]]): The size of kernel used to take the maximum value,
-            is an int number that represents height and width are both ksize, or a tuple
+        kernel_size (Union[int, tuple[int]]): The size of kernel used to take the maximum value,
+            is an int number that represents height and width are both kernel_size, or a tuple
             of two int numbers that represent height and width respectively. Default: 1.
         strides (Union[int, tuple[int]]): The distance of kernel moving, an int number that represents
             the height and width of movement are both strides, or a tuple of two int numbers that
             represent height and width of movement respectively. Default: 1.
-        padding (str): The optional value for pad mode, is "same" or "valid", not case sensitive.
+        pad_mode (str): The optional value for pad mode, is "same" or "valid", not case sensitive.
             Default: "valid".
 
             - same: Adopts the way of completion. The height and width of the output will be the same as
@@ -946,8 +982,8 @@ class MaxPoolGradGrad(_PoolGrad):
     """
 
     @prim_attr_register
-    def __init__(self, ksize=1, strides=1, padding="VALID"):
-        super(MaxPoolGradGrad, self).__init__(ksize, strides, padding)
+    def __init__(self, kernel_size=1, strides=1, pad_mode="VALID"):
+        super(MaxPoolGradGrad, self).__init__(kernel_size, strides, pad_mode)
 
     def infer_shape(self, x1_shape, x2_shape, grad_shape):
         return x1_shape
@@ -970,9 +1006,9 @@ class MaxPoolGradWithArgmax(_PoolGrad):
     """Computes the gradients of MaxPoolWithArgmax."""
 
     @prim_attr_register
-    def __init__(self, ksize=1, strides=1, padding="VALID"):
+    def __init__(self, kernel_size=1, strides=1, pad_mode="VALID"):
         self.init_prim_io_names(inputs=['x', 'grad', 'argmax'], outputs=['output'])
-        super(MaxPoolGradWithArgmax, self).__init__(ksize, strides, padding)
+        super(MaxPoolGradWithArgmax, self).__init__(kernel_size, strides, pad_mode)
 
     def infer_shape(self, x_shape, grad_shape, argmax_shape):
         if not grad_shape:
@@ -988,13 +1024,13 @@ class MaxPoolGradGradWithArgmax(_PoolGrad):
     Computes the gradients of MaxPoolGradWithArgmax.
 
     Args:
-        ksize (Union[int, tuple[int]]): The size of kernel used to take the maximum value,
-            is an int number that represents height and width are both ksize, or a tuple
+        kernel_size (Union[int, tuple[int]]): The size of kernel used to take the maximum value,
+            is an int number that represents height and width are both kernel_size, or a tuple
             of two int numbers that represent height and width respectively. Default: 1.
         strides (Union[int, tuple[int]]): The distance of kernel moving, an int number that represents
             the height and width of movement are both strides, or a tuple of two int numbers that
             represent height and width of movement respectively. Default: 1.
-        padding (str): The optional value for pad mode, is "same" or "valid", not case sensitive.
+        pad_mode (str): The optional value for pad mode, is "same" or "valid", not case sensitive.
             Default: "valid".
 
             - same: Adopts the way of completion. The height and width of the output will be the same as
@@ -1016,9 +1052,9 @@ class MaxPoolGradGradWithArgmax(_PoolGrad):
     """
 
     @prim_attr_register
-    def __init__(self, ksize=1, strides=1, padding="VALID"):
+    def __init__(self, kernel_size=1, strides=1, pad_mode="VALID"):
         self.init_prim_io_names(inputs=['x', 'grad', 'argmax'], outputs=['output'])
-        super(MaxPoolGradGradWithArgmax, self).__init__(ksize, strides, padding)
+        super(MaxPoolGradGradWithArgmax, self).__init__(kernel_size, strides, pad_mode)
 
     def infer_shape(self, x_shape, grad_shape, argmax_shape):
         if not grad_shape:
@@ -1746,12 +1782,44 @@ class SliceGrad(PrimitiveWithInfer):
                 'value': None}
 
 
+class NLLLossGrad(PrimitiveWithInfer):
+    """Computes the gradients of `NLLLoss`."""
+
+    @prim_attr_register
+    def __init__(self, reduction="mean"):
+        """Initialize NLLLoss"""
+        self.init_prim_io_names(inputs=['x', 'target', "weight"], outputs=['loss'])
+        self.reduction = validator.check_string(reduction, ['none', 'sum', 'mean'], 'reduction', self.name)
+        self.add_prim_attr('reduction', self.reduction)
+
+    def infer_shape(self, x_shape, y_grad_shape, t_shape, w_shape, tw_shape):
+        validator.check_int(len(x_shape), [1, 2], Rel.IN, "x rank", self.name)
+        validator.check_int(len(t_shape), 1, Rel.EQ, "target rank", self.name)
+        validator.check_int(len(w_shape), 1, Rel.EQ, "weight rank", self.name)
+        validator.check(f"input_shape[0]", x_shape[0], "target_shape", t_shape[0], Rel.EQ, self.name)
+        if len(x_shape) == 1:
+            validator.check(f"input_shape[0]", x_shape[0], "weight_shape", w_shape[0], Rel.EQ, self.name)
+        else:
+            validator.check(f"input_shape[1]", x_shape[1], "weight_shape", w_shape[0], Rel.EQ, self.name)
+        return x_shape
+
+    def infer_dtype(self, x_dtype, y_grad_dtype, t_dtype, w_dtype, tw_dtype):
+        valid_dtypes = (mstype.float16, mstype.float32)
+        validator.check_tensor_dtype_valid("x_dtype", x_dtype, valid_dtypes, self.name)
+        validator.check_tensor_dtype_valid("y_grad_dtype", y_grad_dtype, valid_dtypes, self.name)
+        validator.check_tensor_dtype_valid("t_dtype", t_dtype, mstype.int32, self.name)
+        validator.check_tensor_dtype_valid("w_dtype", w_dtype, valid_dtypes, self.name)
+        validator.check_tensor_dtype_valid("tw_dtype", tw_dtype, valid_dtypes, self.name)
+        validator.check('tw_shape_dtype', tw_dtype, 'w_shape_dtype', w_dtype, Rel.EQ, self.name)
+        return x_dtype
+
+
 class SmoothL1LossGrad(PrimitiveWithInfer):
     """Computes gradient for prediction on SmoothL1Loss."""
 
     @prim_attr_register
     def __init__(self, beta=1.0):
-        self.add_prim_attr('sigma', beta)
+        pass
 
     def infer_shape(self, prediction, target, dloss):
         validator.check('prediction shape', prediction, 'target shape', target, Rel.EQ, self.name)

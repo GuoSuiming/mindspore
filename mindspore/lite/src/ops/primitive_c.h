@@ -24,6 +24,9 @@
 #ifdef PRIMITIVE_WRITEABLE
 #include "ir/primitive.h"
 #include "schema/inner/model_generated.h"
+#include "schema/inner/ops_generated.h"
+#include "schema/ops_generated.h"
+#include "tools/converter/ops/ops_def.h"
 #else
 #include "schema/model_generated.h"
 #endif
@@ -34,10 +37,11 @@
 
 namespace mindspore {
 namespace lite {
+constexpr const int OP_TYPE_NOT_SET = -1;
 constexpr uint32_t kSingleNum = 1;
 constexpr uint32_t kDoubleNum = 2;
-constexpr uint32_t kMultiNum = 3;
-constexpr uint32_t kDimension_4d = 4;
+constexpr uint32_t kTripleNum = 3;
+constexpr uint32_t kQuadrupleNum = 4;
 
 const std::set<int> kSupportDataType = {kNumberTypeBool,  kNumberTypeUInt8,   kNumberTypeInt8,
                                         kNumberTypeInt32, kNumberTypeFloat32, kNumberTypeFloat16};
@@ -119,6 +123,10 @@ class PrimitiveC : public mindspore::Primitive {
 
   schema::QuantType quant_type() const;
 
+  bool IsEnableHuffmanCode() const;
+
+  void SetEnableHuffmanCode(bool enableHuffmanCode);
+
   virtual int InferShape(std::vector<lite::Tensor *> inputs, std::vector<lite::Tensor *> outputs);
 
   bool infer_flag() const;
@@ -149,6 +157,8 @@ class PrimitiveC : public mindspore::Primitive {
   std::vector<std::vector<schema::QuantParamT>> output_quant_param_;
   schema::QuantType quant_type_{schema::QuantType_QUANT_NONE};
   bool infer_flag_ = true;
+  int op_type_ = OP_TYPE_NOT_SET;
+  bool enableHuffmanCode = false;
 };
 std::shared_ptr<PrimitiveC> GetReturnPrim();
 
@@ -227,6 +237,7 @@ class PrimitiveC {
   char *primitive_buf_ = nullptr;
   bool infer_flag_ = true;
   schema::QuantType quant_type_{schema::QuantType_QUANT_NONE};
+  int op_type_ = OP_TYPE_NOT_SET;
 };
 using PrimitiveCPtr = std::shared_ptr<PrimitiveC>;
 typedef PrimitiveC *(*PrimitiveCCreator)(const schema::Primitive *primitive);

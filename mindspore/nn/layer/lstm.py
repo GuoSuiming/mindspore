@@ -93,13 +93,14 @@ class LSTM(Cell):
         bidirectional (bool): Specifies whether it is a bidirectional LSTM. Default: False.
 
     Inputs:
-        - **input** (Tensor) - Tensor of shape (seq_len, batch_size, `input_size`).
+        - **input** (Tensor) - Tensor of shape (seq_len, batch_size, `input_size`) or
+          (batch_size, seq_len, `input_size`).
         - **hx** (tuple) - A tuple of two Tensors (h_0, c_0) both of data type mindspore.float32 or
           mindspore.float16 and shape (num_directions * `num_layers`, batch_size, `hidden_size`).
           Data type of `hx` must be the same as `input`.
 
     Outputs:
-        Tuple, a tuple constains (`output`, (`h_n`, `c_n`)).
+        Tuple, a tuple contains (`output`, (`h_n`, `c_n`)).
 
         - **output** (Tensor) - Tensor of shape (seq_len, batch_size, num_directions * `hidden_size`).
         - **hx_n** (tuple) - A tuple of two Tensor (h_n, c_n) both of shape

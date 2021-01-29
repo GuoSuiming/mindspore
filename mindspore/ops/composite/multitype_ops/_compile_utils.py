@@ -129,43 +129,24 @@ def _transform_ellipsis_to_slice(data, tuple_index, op_name):
     return tuple_index_new
 
 
-def _expand_data_dims_with_none(data, tuple_index, op_name):
-    """expand the data's dim with 'None' in tuple_index"""
+def _expand_data_dims(data, tuple_index, op_name):
+    """expand the data's dim with 'None' and 'Boolean' in tuple_index"""
     indexes_types = hyper_map(F.typeof, tuple_index)
-    none_positions, tuple_index_without_none = (), ()
+    expand_positions, tuple_index_new = (), ()
     for i, (index, index_type) in enumerate(zip(tuple_index, indexes_types)):
-        none_type_tag = const_utils.judge_index_type(index_type, mstype.type_none)
-        tuple_index_without_none += (const_utils.make_empty_slice(),) if none_type_tag else(index,)
-        none_positions += (i,) if none_type_tag else ()
-    for dim in none_positions:
-        data = F.expand_dims(data, dim)
-    return data, tuple_index_without_none
-
-
-def _expand_data_dims_with_bool(data, tuple_index, op_name):
-    """expand the data's dim with 'True/False' in tuple_index"""
-    indexes_types = hyper_map(F.typeof, tuple_index)
-    bool_positions, tuple_index_without_bool = (), ()
-
-    for i, (index, index_type) in enumerate(zip(tuple_index, indexes_types)):
-        bool_type_tag = const_utils.judge_index_type(index_type, mstype.type_bool)
-        if bool_type_tag:
-            if index:
-                tuple_index_without_bool += (const_utils.make_tensor([0], mstype.int64),)
-            else:
-                # todo wait to complete the operations' support for zero dim-size, then could make 0 length tensor.
-                # to replace the 'False'
-
-                return const_utils.raise_index_error("When tensor is indexed by a tuple which contains bool object, "
-                                                     "the value only support 'True'.")
+        if const_utils.judge_index_type(index_type, mstype.type_none):
+            tuple_index_new += (const_utils.make_empty_slice(),)
+            expand_positions += (i,)
+        elif const_utils.judge_index_type(index_type, mstype.bool_):
+            tuple_index_new += (const_utils.make_tensor([0] if index else[], mstype.int64),)
+            expand_positions += (i,)
         else:
-            tuple_index_without_bool += (index,)
-        bool_positions += (i,) if bool_type_tag else ()
+            tuple_index_new += (index,)
 
-    for dim in bool_positions:
+    for dim in expand_positions:
         data = F.expand_dims(data, dim)
 
-    return data, tuple_index_without_bool
+    return data, tuple_index_new
 
 
 def tensor_index_by_slice(data, slice_index):
@@ -219,22 +200,31 @@ def tensor_index_by_tensor(data, tensor_index):
 def tensor_index_by_list(data, list_index):
     """Tensor getitem by list of int and bool"""
     data_shape = F.shape(data)
-    const_utils.check_sequence_index_type(list_index, const_utils.TENSOR_GETITEM)
-    sub_tuple_index = const_utils.transform_sequence_index(list_index, data_shape[0], const_utils.TENSOR_GETITEM)
-    tensor_index = F.tuple_to_array(sub_tuple_index)
-    tensor_index = F.cast(tensor_index, mstype.int64)
-    return F.gather(data, tensor_index, 0)
+    indexes_types = hyper_map(F.typeof, list_index)
+    if const_utils.judge_indexes_types(indexes_types, mstype.int_type + (mstype.bool_,)):
+        sub_tuple_index = const_utils.transform_sequence_index(list_index, data_shape[0], const_utils.TENSOR_GETITEM)
+        tensor_index = const_utils.make_tensor(sub_tuple_index, mstype.int64)
+        return F.gather(data, tensor_index, 0)
+    tuple_index_new = ()
+    for index in list_index:
+        tuple_index_new += (index,)
+    return tensor_index_by_tuple(data, tuple_index_new)
 
 
 def tensor_index_by_tuple(data, tuple_index):
     """Tensor getitem by tuple of various types with None"""
-    op_name = const_utils.TENSOR_GETITEM
-    if len(tuple_index) == 1:
-        return data[tuple_index[0]]
+    tuple_index_len = len(tuple_index)
+    if tuple_index_len == 0:
+        return data
 
+    op_name = const_utils.TENSOR_GETITEM
     tuple_index = _transform_ellipsis_to_slice(data, tuple_index, op_name)
-    data, tuple_index = _expand_data_dims_with_none(data, tuple_index, op_name)
-    data, tuple_index = _expand_data_dims_with_bool(data, tuple_index, op_name)
+    data, tuple_index = _expand_data_dims(data, tuple_index, op_name)
+
+    data_shape = F.shape(data)
+    data_rank = len(data_shape)
+    min_data_rank, max_data_rank = 0, 8
+    const_utils.judge_data_rank(data_rank, min_data_rank, max_data_rank)
 
     indexes_types = hyper_map(F.typeof, tuple_index)
     contain_type = const_utils.tuple_index_type_cnt(indexes_types, op_name)
@@ -299,12 +289,13 @@ def _generate_indices_from_tuple(data, tuple_index, op_name):
             tensor_positions.append(i)
         elif i in sequence_positions:
             sequence_index = const_utils.transform_sequence_index(index, dim_size, op_name)
-            tensor_index = F.tuple_to_array(sequence_index)
+            tensor_index = const_utils.make_tensor(sequence_index)
             tensor_index = F.cast(tensor_index, mstype.int64)
             tuple_index_new += (tensor_index,)
             tensor_indexes.append(tensor_index)
             tensor_positions.append(i)
         elif i in tensor_positions:
+            const_utils.check_index_type_valid(F.dtype(index), mstype.int_type, op_name)
             tensor_index = F.cast(index, mstype.int64)
             tuple_index_new += (tensor_index,)
             tensor_indexes.append(tensor_index)
@@ -502,7 +493,7 @@ def tensor_setitem_by_tuple_with_number(data, tuple_index, value):
         return data
     op_name = const_utils.TENSOR_GETITEM
     tuple_index = _transform_ellipsis_to_slice(data, tuple_index, op_name)
-    data, tuple_index = _expand_data_dims_with_none(data, tuple_index, op_name)
+    data, tuple_index = _expand_data_dims(data, tuple_index, op_name)
 
     indexes_types = hyper_map(F.typeof, tuple_index)
     contain_type = const_utils.tuple_index_type_cnt(indexes_types, const_utils.TENSOR_SETITEM)
@@ -564,7 +555,7 @@ def tensor_setitem_by_tuple_with_tensor(data, tuple_index, value):
         return data
     op_name = const_utils.TENSOR_GETITEM
     tuple_index = _transform_ellipsis_to_slice(data, tuple_index, op_name)
-    data, tuple_index = _expand_data_dims_with_none(data, tuple_index, op_name)
+    data, tuple_index = _expand_data_dims(data, tuple_index, op_name)
 
     indexes_types = hyper_map(F.typeof, tuple_index)
     contain_type = const_utils.tuple_index_type_cnt(indexes_types, const_utils.TENSOR_SETITEM)
@@ -592,7 +583,7 @@ def tensor_setitem_by_tuple_with_tuple(data, tuple_index, value):
         return data
     op_name = const_utils.TENSOR_GETITEM
     tuple_index = _transform_ellipsis_to_slice(data, tuple_index, op_name)
-    data, tuple_index = _expand_data_dims_with_none(data, tuple_index, op_name)
+    data, tuple_index = _expand_data_dims(data, tuple_index, op_name)
 
     indexes_types = hyper_map(F.typeof, tuple_index)
     contain_type = const_utils.tuple_index_type_cnt(indexes_types, const_utils.TENSOR_SETITEM)
@@ -653,6 +644,6 @@ def tensor_in_sequence(x, y):
     """Assigns whether a sequence contains the given tensor"""
     result = const_utils.scalar_to_tensor(False)
     for i in y:
-        if isinstance(i, mstype.tensor) and x.shape == i.shape and x.dtype == i.dtype:
+        if isinstance(i, Tensor) and x.shape == i.shape and x.dtype == i.dtype:
             result = F.logical_or(F.equal(x, i).all(), result)
     return result

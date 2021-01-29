@@ -40,8 +40,6 @@ class LayerNormCPUKernel : public LiteKernel {
 
  private:
   LayerNormParameter *param_ = nullptr;
-  int outer_size_;
-  int inner_size_;
   float *src_data_ = nullptr;
   float *dst_data_ = nullptr;
   float *gamma_data_ = nullptr;

@@ -30,14 +30,13 @@ using mindspore::kernel::AddressPtr;
 using CTask = std::function<void(size_t, size_t)>;
 namespace mindspore {
 namespace kernel {
-const char KSIZE[] = "ksize";
+const char KERNEL_SIZE[] = "kernel_size";
 const char STRIDE[] = "stride";
 const char STRIDES[] = "strides";
 const char DILATION[] = "dilation";
 const char PAD[] = "pad";
 const char PAD_LIST[] = "pad_list";
 const char PAD_MODE[] = "pad_mode";
-const char PADDING[] = "padding";
 const char PAD_MODE_LOWER_SAME[] = "same";
 const char PAD_MODE_LOWER_VALID[] = "valid";
 const char PAD_MODE_UPPER_SAME[] = "SAME";
@@ -67,6 +66,7 @@ enum OperateType {
   SQRT,
   POW,
   REALDIV,
+  FLOORDIV,
   MOD,
   NEG,
   LESS,
@@ -83,11 +83,16 @@ enum OperateType {
   EQUAL,
   NOTEQUAL,
   LESSEQUAL,
+  LOGICALAND,
+  LOGICALOR,
+  LOGICALNOT,
   FLOOR,
   SQUAREDDIFFERENCE,
   GREATER,
   GREATEREQUAL,
   RECIPROCAL,
+  GELU,
+  GELUGRAD,
 };
 
 class CPUKernel : public kernel::KernelMod {
@@ -120,6 +125,7 @@ class CPUKernelUtils {
   static size_t GetElementNumOnAxis(const std::vector<size_t> &shape, int axis);
   static void GetElementNumEveryDim(const std::vector<size_t> &shape, std::vector<size_t> *element_num);
   static void ParallelFor(const CTask &task, size_t count);
+  static std::vector<size_t> FlatShapeByAxis(const std::vector<size_t> &shape, int axis);
 };
 }  // namespace kernel
 }  // namespace mindspore

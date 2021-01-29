@@ -1,7 +1,7 @@
 /**
  * This is the C++ adaptation and derivative work of Myia (https://github.com/mila-iqia/myia/).
  *
- * Copyright 2019-2020 Huawei Technologies Co., Ltd
+ * Copyright 2019-2021 Huawei Technologies Co., Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,11 +44,18 @@ PrimitiveEvalImplMap &GetPrimitiveToEvalImplMap() {
     {prim::kPrimSqrtGrad, {InferImplSqrtGrad, true}},
     {prim::kPrimSub, {InferImplSub, true}},
     {prim::kPrimEqual, {InferImplEqual, true}},
-    {prim::kPrimReduceSum, {InferImplReduceSum, true}},
+    {prim::kPrimReduceSum, {InferImplReduceFunc, true}},
+    {prim::kPrimReduceMean, {InferImplReduceFunc, true}},
+    {prim::kPrimReduceAll, {InferImplReduceFunc, true}},
+    {prim::kPrimReduceAny, {InferImplReduceFunc, true}},
+    {prim::kPrimReduceMax, {InferImplReduceFunc, true}},
+    {prim::kPrimReduceMin, {InferImplReduceFunc, true}},
     {prim::kPrimMinimum, {InferImplMinimum, true}},
     {prim::kPrimDivNoNan, {InferImplDivNoNan, true}},
     {prim::kPrimLinSpace, {InferImplLinSpace, true}},
     {prim::kPrimAddN, {InferImplAddN, true}},
+    {prim::kPrimMatMul, {InferImplMatMul, true}},
+    {prim::kPrimBatchMatMul, {InferImplBatchMatMul, true}},
     // Array
     {prim::kPrimScalarToArray, {InferImplScalarToArray, true}},
     {prim::kPrimArrayToScalar, {InferImplArrayToScalar, true}},
@@ -81,6 +88,8 @@ PrimitiveEvalImplMap &GetPrimitiveToEvalImplMap() {
     {prim::kPrimMapUniform, {InferImplMapUniform, true}},
     {prim::kPrimSplit, {InferImplSplit, true}},
     {prim::kPrimSequenceMask, {InferImplSequenceMask, true}},
+    {prim::kPrimConcat, {InferImplConcat, true}},
+    {prim::kPrimRange, {InferImplRange, true}},
     // Structure
     {prim::kPrimMakeTuple, {InferImplMakeTuple, true}},
     {prim::kPrimMakeList, {InferImplMakeList, true}},
@@ -108,8 +117,10 @@ PrimitiveEvalImplMap &GetPrimitiveToEvalImplMap() {
     {prim::kPrimFusedBatchNormGrad, {InferImplFusedBatchNormGrad, true}},
     {prim::kPrimBatchNormGrad, {InferImplBatchNormGrad, true}},
     {prim::kPrimReluGrad, {InferImplReluGrad, true}},
+    {prim::kPrimConv2D, {InferImplConv2D, true}},
     {prim::kPrimConv2DBackpropInput, {InferImplConv2DBackpropInput, true}},
     {prim::kPrimConv2DBackpropFilter, {InferImplConv2DBackpropFilter, true}},
+    {prim::kPrimBiasAdd, {InferImplBiasAdd, true}},
     {prim::kPrimBiasAddGrad, {InferImplBiasAddGrad, true}},
     {prim::kPrimRelu, {InferImplRelu, true}},
     {prim::kPrimZerosLike, {InferImplZerosLike, true}},
@@ -120,6 +131,7 @@ PrimitiveEvalImplMap &GetPrimitiveToEvalImplMap() {
     {prim::kPrimSparseApplyFtrl, {InferImplSparseApplyFtrl, true}},
     {prim::kPrimSparseApplyProximalAdagrad, {InferImplSparseApplyProximalAdagrad, true}},
     {prim::kPrimSGD, {InferImplSGD, true}},
+    {prim::kPrimCTCGreedyDecoder, {InferImplCTCGreedyDecoder, true}},
     // Others
     {prim::kPrimIdentity, {InferImplIdentity, true}},
     // Set impl to null as it will use PartialEvaluator;

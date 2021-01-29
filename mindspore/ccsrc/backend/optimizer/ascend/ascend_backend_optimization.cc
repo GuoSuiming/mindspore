@@ -1,5 +1,5 @@
 /**
- * Copyright 2019 Huawei Technologies Co., Ltd
+ * Copyright 2019-2021 Huawei Technologies Co., Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -122,7 +122,9 @@
 #include "utils/config_manager.h"
 #include "debug/anf_ir_dump.h"
 #include "debug/dump_proto.h"
-
+#ifdef ENABLE_DUMP_IR
+#include "debug/rdr/running_data_recorder.h"
+#endif
 namespace mindspore {
 namespace opt {
 namespace {
@@ -155,7 +157,6 @@ void AddAscendIRFusionRulesPass(PassManager *ir_fusion_pm) {
 
 void AddAscendIRFusionPass(PassManager *ir_fusion_pm) {
   MS_EXCEPTION_IF_NULL(ir_fusion_pm);
-  ir_fusion_pm->AddPass(std::make_shared<BatchNormBertFission>());
   ir_fusion_pm->AddPass(std::make_shared<SingleBatchNormFission>());
   ir_fusion_pm->AddPass(std::make_shared<BatchNorm2BNInfer>());
   ir_fusion_pm->AddPass(std::make_shared<BatchNormGrad2BNInferGrad>());
@@ -263,6 +264,10 @@ void AscendBackendIRFusionOptimization(const std::shared_ptr<session::KernelGrap
   auto context_ptr = MsContext::GetInstance();
   MS_EXCEPTION_IF_NULL(context_ptr);
   bool save_graphs = context_ptr->get_param<bool>(MS_CTX_SAVE_GRAPHS_FLAG);
+#ifdef ENABLE_DUMP_IR
+  std::string tag = "before_hwopt";
+  mindspore::RDR::RecordAnfGraph(SubModuleId::SM_OPTIMIZER, tag, kernel_graph, false, ".ir;.pb");
+#endif
   if (save_graphs) {
     std::string file_name = "hwopt_d_ir_fusion_before_graph_" + std::to_string(kernel_graph->graph_id()) + ".ir";
     DumpIR(file_name, kernel_graph);
@@ -270,15 +275,8 @@ void AscendBackendIRFusionOptimization(const std::shared_ptr<session::KernelGrap
   }
   auto optimizer = std::make_shared<GraphOptimizer>();
   auto ir_fusion_pm = std::make_shared<PassManager>("ir_fusion_pm");
-  if (context_ptr->get_param<int>(MS_CTX_EXECUTION_MODE) == kPynativeMode) {
-    ir_fusion_pm->AddPass(std::make_shared<BnSplit>());
-    ir_fusion_pm->AddPass(std::make_shared<BnGradSplit>());
-  } else {
-    ir_fusion_pm->AddPass(std::make_shared<BatchNormGradSplit>());
-    ir_fusion_pm->AddPass(std::make_shared<FusedBatchNormFusion>());
-    ir_fusion_pm->AddPass(std::make_shared<FusedBatchNormMixPrecisionFusion0>());
-    ir_fusion_pm->AddPass(std::make_shared<FusedBatchNormMixPrecisionFusion1>());
-  }
+  ir_fusion_pm->AddPass(std::make_shared<BnSplit>());
+  ir_fusion_pm->AddPass(std::make_shared<BnGradSplit>());
   ir_fusion_pm->AddPass(std::make_shared<LayerNormGradSplit>());
   ir_fusion_pm->AddPass(std::make_shared<InsertPadForNMSWithMask>());
   ir_fusion_pm->AddPass(std::make_shared<InsertPlaceholderForDynamicGRUV2>());
@@ -388,10 +386,17 @@ void AscendBackendOptimization(const std::shared_ptr<session::KernelGraph> &kern
   optimizer2->AddPassManager(other2_pm);
   (void)optimizer2->Optimize(kernel_graph);
   kernel_graph->SetExecOrderByDefault();
-
+#ifdef ENABLE_DUMP_IR
+  std::string tag = "hwopt_d_end";
+  mindspore::RDR::RecordAnfGraph(SubModuleId::SM_OPTIMIZER, tag, kernel_graph, true, ".ir;.pb");
+  const std::vector<CNodePtr> &exec_order = kernel_graph->execution_order();
+  std::vector<CNodePtr> graph_exec_order(exec_order);
+  tag = "graph_exec_order";
+  mindspore::RDR::RecordGraphExecOrder(SubModuleId::SM_OPTIMIZER, tag, std::move(graph_exec_order));
+#endif
   if (save_graphs) {
     std::string file_name = "hwopt_d_end_graph_" + std::to_string(kernel_graph->graph_id()) + ".ir";
-    DumpIR(file_name, kernel_graph, true);
+    DumpIR(file_name, kernel_graph, true, kTopStack);
     DumpIRProto(kernel_graph, "after_hwopt_" + std::to_string(kernel_graph->graph_id()));
     kernel_graph->DumpFuncGraph("hwopt_d_end");
   }

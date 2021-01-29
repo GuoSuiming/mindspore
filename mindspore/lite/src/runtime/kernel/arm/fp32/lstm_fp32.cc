@@ -55,29 +55,29 @@ int LstmCPUKernel::InitParam() {
   auto input = in_tensors_.front();
   MS_ASSERT(input != nullptr);
   std::vector<int> in_shape = input->shape();
-  lstm_parm_->seq_len_ = in_shape.at(0);
-  lstm_parm_->batch_ = in_shape.at(1);
-  lstm_parm_->input_size_ = in_shape.at(2);
+  lstm_param_->seq_len_ = in_shape.at(0);
+  lstm_param_->batch_ = in_shape.at(1);
+  lstm_param_->input_size_ = in_shape.at(2);
 
   auto weight_i = in_tensors_.at(1);
   MS_ASSERT(weight_i != nullptr);
   std::vector<int> w_shape = weight_i->shape();
-  lstm_parm_->hidden_size_ = w_shape.at(1) / 4;
+  lstm_param_->hidden_size_ = w_shape.at(1) / 4;
 
-  lstm_parm_->input_step_ = lstm_parm_->batch_ * lstm_parm_->input_size_;
-  lstm_parm_->output_step_ = lstm_parm_->bidirectional_ ? 2 * lstm_parm_->batch_ * lstm_parm_->hidden_size_
-                                                        : lstm_parm_->batch_ * lstm_parm_->hidden_size_;
+  lstm_param_->input_step_ = lstm_param_->batch_ * lstm_param_->input_size_;
+  lstm_param_->output_step_ = lstm_param_->bidirectional_ ? 2 * lstm_param_->batch_ * lstm_param_->hidden_size_
+                                                          : lstm_param_->batch_ * lstm_param_->hidden_size_;
   return RET_OK;
 }
 
 int LstmCPUKernel::InitBuffer() {
-  gate_buffer_ = reinterpret_cast<float *>(malloc(4 * lstm_parm_->batch_ * lstm_parm_->hidden_size_ * sizeof(float)));
+  gate_buffer_ = reinterpret_cast<float *>(malloc(4 * lstm_param_->batch_ * lstm_param_->hidden_size_ * sizeof(float)));
   if (gate_buffer_ == nullptr) {
     MS_LOG(ERROR) << "LstmCPUKernel malloc gate_buffer error.";
     return RET_ERROR;
   }
-  if (!(lstm_parm_->smooth_ >= -FLT_EPSILON && lstm_parm_->smooth_ <= FLT_EPSILON)) {
-    int buffer_size = 2 * lstm_parm_->batch_ * lstm_parm_->hidden_size_ * sizeof(float);
+  if (!(lstm_param_->smooth_ >= -FLT_EPSILON && lstm_param_->smooth_ <= FLT_EPSILON)) {
+    int buffer_size = 2 * lstm_param_->batch_ * lstm_param_->hidden_size_ * sizeof(float);
     state_buffer_ = reinterpret_cast<float *>(malloc(buffer_size));
     if (state_buffer_ == nullptr) {
       MS_LOG(ERROR) << "LstmCPUKernel malloc state_buffer error.";
@@ -96,7 +96,7 @@ int LstmCPUKernel::InitWeightBias() {
     MS_LOG(ERROR) << "LstmCPUKernel malloc weight_i_ptr_ error.";
     return RET_ERROR;
   }
-  memcpy(weight_i_ptr_, weight_i->MutableData(), weight_i->ElementsNum() * sizeof(float));
+  memcpy(weight_i_ptr_, weight_i->data_c(), weight_i->ElementsNum() * sizeof(float));
 
   auto weight_h = in_tensors_.at(2);
   MS_ASSERT(weight_h != nullptr);
@@ -105,24 +105,26 @@ int LstmCPUKernel::InitWeightBias() {
     MS_LOG(ERROR) << "LstmCPUKernel malloc weight_h_ error.";
     return RET_ERROR;
   }
-  memcpy(weight_h_ptr_, weight_h->MutableData(), weight_h->ElementsNum() * sizeof(float));
+  memcpy(weight_h_ptr_, weight_h->data_c(), weight_h->ElementsNum() * sizeof(float));
 
+  std::vector<int> w_shape = weight_i->shape();
+  auto hidden_size = w_shape.at(1) / 4;
   // init bias
-  int bias_num = lstm_parm_->bidirectional_ ? 2 * 4 * lstm_parm_->hidden_size_ : 4 * lstm_parm_->hidden_size_;
+  int bias_num = lstm_param_->bidirectional_ ? 2 * 4 * hidden_size : 4 * hidden_size;
   bias_ptr_ = reinterpret_cast<float *>(malloc(bias_num * sizeof(float)));
   if (bias_ptr_ == nullptr) {
     MS_LOG(ERROR) << "LstmCPUKernel malloc bias_ptr_ error.";
     return RET_ERROR;
   }
 
-  auto bias_data = reinterpret_cast<float *>(in_tensors_.at(3)->MutableData());
-  const int state_bias_offset = 4 * lstm_parm_->hidden_size_;
+  auto bias_data = reinterpret_cast<float *>(in_tensors_.at(3)->data_c());
+  const int state_bias_offset = 4 * hidden_size;
   for (int i = 0; i < state_bias_offset; i++) {
     bias_ptr_[i] = bias_data[i] + bias_data[i + state_bias_offset];
   }
-  if (lstm_parm_->bidirectional_) {
-    bias_data += 4 * lstm_parm_->hidden_size_ * 2;
-    auto backward_bias = bias_ptr_ + 4 * lstm_parm_->hidden_size_;
+  if (lstm_param_->bidirectional_) {
+    bias_data += 4 * hidden_size * 2;
+    auto backward_bias = bias_ptr_ + 4 * hidden_size;
     for (int i = 0; i < state_bias_offset; i++) {
       backward_bias[i] = bias_data[i] + bias_data[i + state_bias_offset];
     }
@@ -131,6 +133,14 @@ int LstmCPUKernel::InitWeightBias() {
 }
 
 int LstmCPUKernel::Init() {
+  FreeTmpBuffer();
+  auto ret = InitWeightBias();
+  if (ret != RET_OK) {
+    MS_LOG(ERROR) << "LstmCPUKernel InitWeightBias error.";
+    FreeTmpBuffer();
+    return RET_ERROR;
+  }
+
   if (!InferShapeDone()) {
     return RET_OK;
   }
@@ -138,17 +148,9 @@ int LstmCPUKernel::Init() {
 }
 
 int LstmCPUKernel::ReSize() {
-  FreeTmpBuffer();
   auto ret = InitParam();
   if (ret != RET_OK) {
     MS_LOG(ERROR) << "LstmCPUKernel InitParam error.";
-    return RET_ERROR;
-  }
-
-  ret = InitWeightBias();
-  if (ret != RET_OK) {
-    MS_LOG(ERROR) << "LstmCPUKernel InitWeightBias error.";
-    FreeTmpBuffer();
     return RET_ERROR;
   }
 
@@ -171,22 +173,22 @@ int LstmCPUKernel::Run() {
   auto output = out_tensors_.at(0);
   MS_ASSERT(output != nullptr);
 
-  auto input_ptr = reinterpret_cast<float *>(input->MutableData());
+  auto input_ptr = reinterpret_cast<float *>(input->data_c());
   MS_ASSERT(input_ptr);
-  auto output_ptr = reinterpret_cast<float *>(output->MutableData());
+  auto output_ptr = reinterpret_cast<float *>(output->data_c());
   MS_ASSERT(output_ptr);
   auto output_hidden_state = out_tensors_[1];
-  memcpy(output_hidden_state->MutableData(), hidden_state->MutableData(), hidden_state->ElementsNum() * sizeof(float));
+  memcpy(output_hidden_state->data_c(), hidden_state->data_c(), hidden_state->ElementsNum() * sizeof(float));
   auto output_cell_state = out_tensors_[2];
-  memcpy(output_cell_state->MutableData(), cell_state->MutableData(), cell_state->ElementsNum() * sizeof(float));
+  memcpy(output_cell_state->data_c(), cell_state->data_c(), cell_state->ElementsNum() * sizeof(float));
 
   MS_ASSERT(weight_h_ptr_);
   MS_ASSERT(weight_i_ptr_);
   MS_ASSERT(bias_ptr_);
   MS_ASSERT(gate_buffer_);
   Lstm(output_ptr, input_ptr, weight_i_ptr_, weight_h_ptr_, bias_ptr_,
-       reinterpret_cast<float *>(output_hidden_state->MutableData()),
-       reinterpret_cast<float *>(output_cell_state->MutableData()), gate_buffer_, state_buffer_, lstm_parm_);
+       reinterpret_cast<float *>(output_hidden_state->data_c()), reinterpret_cast<float *>(output_cell_state->data_c()),
+       gate_buffer_, state_buffer_, lstm_param_);
   return RET_OK;
 }
 

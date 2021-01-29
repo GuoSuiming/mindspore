@@ -51,6 +51,13 @@ namespace dataset {
     }                                                                      \
   } while (false)
 
+#define CHECK_FAIL_RETURN_SYNTAX_ERROR(_condition, _e)                 \
+  do {                                                                 \
+    if (!(_condition)) {                                               \
+      return Status(StatusCode::kSyntaxError, __LINE__, __FILE__, _e); \
+    }                                                                  \
+  } while (false)
+
 #define RETURN_UNEXPECTED_IF_NULL(_ptr)                                         \
   do {                                                                          \
     if ((_ptr) == nullptr) {                                                    \
@@ -69,6 +76,15 @@ namespace dataset {
 #define RETURN_STATUS_SYNTAX_ERROR(_e)                               \
   do {                                                               \
     return Status(StatusCode::kSyntaxError, __LINE__, __FILE__, _e); \
+  } while (false)
+
+#define RETURN_SECOND_IF_ERROR(_s, _r) \
+  do {                                 \
+    Status __rc = (_s);                \
+    if (__rc.IsError()) {              \
+      MS_LOG(ERROR) << __rc;           \
+      return _r;                       \
+    }                                  \
   } while (false)
 
 enum class StatusCode : char {
@@ -125,6 +141,12 @@ class Status {
 
   StatusCode get_code() const;
 
+  int GetLineOfCode() const { return line_of_code_; }
+
+  std::string SetErrDescription(const std::string &err_description);
+
+  std::string GetErrDescription() const { return err_description_; }
+
   friend std::ostream &operator<<(std::ostream &os, const Status &s);
 
   explicit operator bool() const { return (get_code() == StatusCode::kOK); }
@@ -149,8 +171,17 @@ class Status {
 
  private:
   StatusCode code_;
+  int line_of_code_;
+  std::string file_name_;
+  std::string err_description_;
   std::string err_msg_;
 };
+
+#if !defined(_WIN32) && !defined(_WIN64)
+const float MAX_MEMORY_USAGE_THRESHOLD = 0.95;
+
+float GetMemoryUsage();
+#endif
 }  // namespace dataset
 }  // namespace mindspore
 #endif  // MINDSPORE_CCSRC_MINDDATA_DATASET_UTIL_STATUS_H_

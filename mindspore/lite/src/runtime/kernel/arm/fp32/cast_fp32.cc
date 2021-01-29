@@ -14,14 +14,9 @@
  * limitations under the License.
  */
 #include "src/runtime/kernel/arm/fp32/cast_fp32.h"
-#include <vector>
 #include "schema/model_generated.h"
 #include "src/kernel_registry.h"
-#include "src/tensor.h"
-#include "nnacl/fp32/cast_fp32.h"
-#include "nnacl/op_base.h"
 #include "src/runtime/runtime_api.h"
-#include "include/errorcode.h"
 
 using mindspore::kernel::KERNEL_ARCH::kCPU;
 using mindspore::lite::KernelRegistrar;
@@ -90,6 +85,12 @@ int CastCPUKernel::DoCast(int thread_id) {
     } else if (input_data_type == kNumberTypeInt32 && output_data_type == kNumberTypeInt64) {
       Int32ToInt64(reinterpret_cast<int32_t *>(input->data_c()) + offset,
                    reinterpret_cast<int64_t *>(output_data) + offset, data_num);
+    } else if (input_data_type == kNumberTypeFloat32 && output_data_type == kNumberTypeInt16) {
+      Float32ToInt16(reinterpret_cast<float *>(input->data_c()) + offset,
+                     reinterpret_cast<int16_t *>(output_data) + offset, data_num);
+    } else if (input_data_type == kNumberTypeBool && output_data_type == kNumberTypeInt32) {
+      BoolToInt32(reinterpret_cast<bool *>(input->data_c()) + offset, reinterpret_cast<int32_t *>(output_data) + offset,
+                  data_num);
     } else {
       MS_LOG(ERROR) << "Unsupported datatype from " << input_data_type << " to " << output_data_type;
       return RET_ERROR;
